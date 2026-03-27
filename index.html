@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Screw Puzzle</title>
+    <style>
+        /* ── Reset & Global ─────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-start: #0f0c29;
+            --bg-mid:   #302b63;
+            --bg-end:   #24243e;
+            --panel-bg: rgba(255,255,255,0.06);
+            --text:     #eee;
+            --accent:   #f7b731;
+            --hole-bg:  #1a1a2e;
+            --shadow:   rgba(0,0,0,0.45);
+        }
+
+        html, body {
+            width: 100%; height: 100%;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-mid), var(--bg-end));
+            color: var(--text);
+            overflow: hidden;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        /* ── Layout ─────────────────────────────────────────────── */
+        #app {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: flex-start;
+            width: 100%; height: 100%;
+            max-width: 520px; margin: 0 auto;
+            padding: 12px 8px 8px;
+            position: relative;
+        }
+
+        /* ── Header ─────────────────────────────────────────────── */
+        .header {
+            width: 100%; display: flex;
+            align-items: center; justify-content: space-between;
+            padding: 4px 8px 10px;
+        }
+        .header h1 {
+            font-size: 1.35rem; font-weight: 700;
+            background: linear-gradient(90deg, #f7b731, #fc5c65);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: .5px;
+        }
+        .level-badge {
+            font-size: .85rem; font-weight: 600;
+            background: rgba(255,255,255,0.12); border-radius: 20px;
+            padding: 4px 14px;
+        }
+
+        /* ── Board ──────────────────────────────────────────────── */
+        .board-wrapper {
+            position: relative;
+            width: 100%; flex: 1 1 auto;
+            min-height: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .board {
+            position: relative;
+            width: 100%; max-width: 480px;
+            aspect-ratio: 1 / 1.05;
+        }
+
+        /* ── Plates ─────────────────────────────────────────────── */
+        .plate {
+            position: absolute;
+            border-radius: 18px;
+            transition: opacity .45s ease, transform .45s ease;
+            pointer-events: none;
+            box-shadow: 0 4px 18px var(--shadow);
+        }
+        .plate.removed {
+            opacity: 0;
+            transform: scale(.85) translateY(20px);
+        }
+
+        /* ── Screws ─────────────────────────────────────────────── */
+        .screw {
+            position: absolute;
+            width: 42px; height: 42px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 50;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+            pointer-events: auto;
+        }
+        .screw::before {
+            content: '';
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #e8e8e8, #b0b0b0 60%, #888 100%);
+            box-shadow: inset 0 2px 4px rgba(255,255,255,.45), inset 0 -2px 4px rgba(0,0,0,.25),
+                        0 2px 8px rgba(0,0,0,.35);
+            position: absolute;
+        }
+        .screw::after {
+            content: '+';
+            font-size: 22px; font-weight: 700;
+            color: #666;
+            z-index: 1;
+            text-shadow: 0 1px 0 rgba(255,255,255,.4);
+        }
+        .screw:hover { transform: scale(1.12); filter: brightness(1.1); }
+        .screw:active { transform: scale(.95); }
+        .screw.blocked { cursor: not-allowed; opacity: .55; }
+        .screw.selected {
+            transform: scale(1.22) translateY(-8px);
+            filter: brightness(1.2) drop-shadow(0 6px 14px rgba(247,183,49,.55));
+            z-index: 200;
+        }
+        .screw.animating {
+            transition: left .4s cubic-bezier(.4,0,.2,1),
+                        top .4s cubic-bezier(.4,0,.2,1),
+                        transform .4s ease, opacity .35s ease;
+        }
+
+        /* colour ring around screw matching plate */
+        .screw .ring {
+            position: absolute;
+            width: 42px; height: 42px;
+            border-radius: 50%;
+            border: 3.5px solid currentColor;
+            pointer-events: none;
+        }
+
+        /* ── Holes (slots at bottom) ────────────────────────────── */
+        .holes-bar {
+            width: 100%; max-width: 480px;
+            display: flex; justify-content: center; gap: 8px;
+            padding: 14px 0 6px;
+            flex-shrink: 0;
+        }
+        .hole {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            background: var(--hole-bg);
+            border: 2.5px dashed rgba(255,255,255,0.18);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: border-color .2s, transform .2s, background .2s;
+            position: relative;
+        }
+        .hole:hover { border-color: var(--accent); transform: scale(1.08); }
+        .hole.filled {
+            border-style: solid;
+            border-color: rgba(255,255,255,0.25);
+            cursor: default;
+        }
+        .hole.filled::before {
+            content: '+';
+            font-size: 20px; font-weight: 700; color: #999;
+        }
+        .hole.filled .ring-fill {
+            position: absolute; width: 42px; height: 42px;
+            border-radius: 50%;
+            border: 3px solid currentColor;
+        }
+        .hole.filled .screw-head {
+            width: 34px; height: 34px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ddd, #aaa 70%, #888);
+            box-shadow: inset 0 1px 3px rgba(255,255,255,.35), 0 1px 4px rgba(0,0,0,.3);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: 700; color: #666;
+        }
+
+        /* ── Buttons ────────────────────────────────────────────── */
+        .btn-row {
+            display: flex; gap: 10px; padding: 6px 0 10px;
+        }
+        .btn {
+            padding: 8px 22px; border: none; border-radius: 28px;
+            font-size: .9rem; font-weight: 600; cursor: pointer;
+            background: rgba(255,255,255,0.12); color: var(--text);
+            transition: background .2s, transform .15s;
+            backdrop-filter: blur(4px);
+        }
+        .btn:hover { background: rgba(255,255,255,0.22); transform: scale(1.04); }
+        .btn:active { transform: scale(.96); }
+        .btn-primary {
+            background: linear-gradient(135deg, #f7b731, #fc5c65);
+            color: #fff;
+        }
+
+        /* ── Overlay / modal ────────────────────────────────────── */
+        .overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.65);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+            opacity: 0; pointer-events: none;
+            transition: opacity .3s ease;
+        }
+        .overlay.show { opacity: 1; pointer-events: auto; }
+        .modal {
+            background: linear-gradient(145deg, #2d2b55, #1f1d47);
+            border-radius: 24px; padding: 32px 28px;
+            text-align: center; min-width: 260px;
+            box-shadow: 0 12px 48px rgba(0,0,0,.5);
+            transform: scale(.88); transition: transform .3s ease;
+        }
+        .overlay.show .modal { transform: scale(1); }
+        .modal h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .modal p  { font-size: .95rem; color: #bbb; margin-bottom: 18px; }
+        .modal .stars { font-size: 2rem; margin-bottom: 12px; }
+
+        /* ── Start screen ───────────────────────────────────────── */
+        .start-screen {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 900; gap: 18px;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-mid), var(--bg-end));
+        }
+        .start-screen h1 {
+            font-size: 2.4rem; font-weight: 800;
+            background: linear-gradient(90deg, #f7b731, #fc5c65, #f7b731);
+            background-size: 200% auto;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s linear infinite;
+        }
+        @keyframes shimmer { to { background-position: 200% center; } }
+        .start-screen p { color: #aaa; font-size: 1rem; max-width: 280px; text-align: center; }
+        .start-screen .screw-icon {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #e8e8e8, #aaa 60%, #777);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 42px; font-weight: 700; color: #555;
+            box-shadow: 0 6px 28px rgba(0,0,0,.4);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        /* ── Game-over overlay ──────────────────────────────────── */
+        .game-over-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.7);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; opacity: 0; pointer-events: none;
+            transition: opacity .35s;
+        }
+        .game-over-overlay.show { opacity: 1; pointer-events: auto; }
+
+        /* ── Responsive ─────────────────────────────────────────── */
+        @media (max-width: 400px) {
+            .screw { width: 36px; height: 36px; }
+            .screw::before { width: 30px; height: 30px; }
+            .screw .ring { width: 36px; height: 36px; }
+            .screw::after { font-size: 18px; }
+            .hole { width: 42px; height: 42px; }
+        }
+        @media (min-width: 768px) {
+            #app { padding-top: 24px; }
+            .header h1 { font-size: 1.6rem; }
+        }
+        @media (min-width: 1024px) {
+            .board { max-width: 440px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- Start screen -->
+    <div class="start-screen" id="startScreen">
+        <div class="screw-icon">+</div>
+        <h1>Screw Puzzle</h1>
+        <p>Unscrew the bolts and free the plates! Tap a screw, then tap an empty hole to move it.</p>
+        <button class="btn btn-primary" id="btnStart" style="font-size:1.05rem;padding:12px 38px;margin-top:8px;">Play</button>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>Screw Puzzle</h1>
+        <span class="level-badge" id="levelBadge">Level 1</span>
+    </div>
+
+    <!-- Board area -->
+    <div class="board-wrapper">
+        <div class="board" id="board"></div>
+    </div>
+
+    <!-- Holes bar -->
+    <div class="holes-bar" id="holesBar"></div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+        <button class="btn" id="btnRestart">↻ Restart</button>
+        <button class="btn" id="btnUndo">↩ Undo</button>
+    </div>
+</div>
+
+<!-- Win overlay -->
+<div class="overlay" id="winOverlay">
+    <div class="modal">
+        <div class="stars">⭐⭐⭐</div>
+        <h2>Level Complete!</h2>
+        <p id="winMsg">Great job!</p>
+        <button class="btn btn-primary" id="btnNext" style="margin-top:4px;">Next Level ▸</button>
+    </div>
+</div>
+
+<!-- Game-over overlay -->
+<div class="game-over-overlay" id="gameOverOverlay">
+    <div class="modal">
+        <h2>😵 No More Moves!</h2>
+        <p>All holes are full. Try again!</p>
+        <button class="btn btn-primary" id="btnRetry" style="margin-top:4px;">Retry</button>
+    </div>
+</div>
+
+<script>
+/* ====================================================================
+   Screw Puzzle – Game Logic
+   ==================================================================== */
+(() => {
+    'use strict';
+
+    /* ── Colour palette for plates ──────────────────────────────── */
+    const COLORS = [
+        { fill: 'rgba(231, 76, 60, 0.72)',  border: '#e74c3c', ring: '#e74c3c' },
+        { fill: 'rgba(46,204,113,0.72)',     border: '#2ecc71', ring: '#2ecc71' },
+        { fill: 'rgba(52,152,219,0.72)',     border: '#3498db', ring: '#3498db' },
+        { fill: 'rgba(243,156,18,0.72)',     border: '#f39c12', ring: '#f39c12' },
+        { fill: 'rgba(155,89,182,0.72)',     border: '#9b59b6', ring: '#9b59b6' },
+        { fill: 'rgba(26,188,156,0.72)',     border: '#1abc9c', ring: '#1abc9c' },
+        { fill: 'rgba(241,196,15,0.72)',     border: '#f1c40f', ring: '#f1c40f' },
+        { fill: 'rgba(230,126,34,0.72)',     border: '#e67e22', ring: '#e67e22' },
+    ];
+
+    /* ── Level definitions ──────────────────────────────────────── */
+    // Each plate: { x, y, w, h, colorIdx, zIndex }
+    // Screws are placed at plate corners or edges; plates sharing a
+    // screw position means those screws go through multiple plates.
+    // screwsPerPlate: how many screws hold each plate
+    // holes: number of available holes
+
+    function buildLevels() {
+        /* Helper: pct-based coordinates (0-100) for responsive layout */
+        const P = (x, y, w, h, ci, z) => ({ x, y, w, h, colorIdx: ci, zIndex: z });
+
+        return [
+            /* ── Level 1 – Tutorial (2 plates, easy) ────────────── */
+            {
+                plates: [
+                    P(10, 25, 38, 32, 0, 1),
+                    P(52, 25, 38, 32, 1, 2),
+                ],
+                screwPositions: [
+                    { x: 18, y: 30, plates: [0] },
+                    { x: 40, y: 30, plates: [0] },
+                    { x: 60, y: 30, plates: [1] },
+                    { x: 82, y: 30, plates: [1] },
+                    { x: 18, y: 50, plates: [0] },
+                    { x: 82, y: 50, plates: [1] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 2 – Overlap (2 plates share a screw) ─────── */
+            {
+                plates: [
+                    P(8, 20, 50, 35, 2, 1),
+                    P(42, 30, 50, 35, 3, 2),
+                ],
+                screwPositions: [
+                    { x: 16, y: 26, plates: [0] },
+                    { x: 50, y: 26, plates: [0] },
+                    { x: 16, y: 48, plates: [0] },
+                    { x: 50, y: 48, plates: [0, 1] },
+                    { x: 84, y: 36, plates: [1] },
+                    { x: 84, y: 58, plates: [1] },
+                    { x: 50, y: 58, plates: [1] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 3 – Three plates stacked ─────────────────── */
+            {
+                plates: [
+                    P(5, 10, 44, 35, 0, 1),
+                    P(30, 25, 44, 35, 4, 2),
+                    P(50, 42, 44, 35, 1, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 16, plates: [0] },
+                    { x: 41, y: 16, plates: [0] },
+                    { x: 13, y: 38, plates: [0] },
+                    { x: 41, y: 38, plates: [0, 1] },
+                    { x: 66, y: 31, plates: [1] },
+                    { x: 38, y: 53, plates: [1] },
+                    { x: 66, y: 53, plates: [1, 2] },
+                    { x: 58, y: 48, plates: [2] },
+                    { x: 86, y: 48, plates: [2] },
+                    { x: 86, y: 70, plates: [2] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 4 – Four plates ──────────────────────────── */
+            {
+                plates: [
+                    P(5,  5,  42, 30, 5, 1),
+                    P(50, 5,  42, 30, 6, 1),
+                    P(5,  45, 42, 30, 7, 2),
+                    P(50, 45, 42, 30, 0, 2),
+                ],
+                screwPositions: [
+                    { x: 13, y: 11, plates: [0] },
+                    { x: 39, y: 11, plates: [0] },
+                    { x: 13, y: 28, plates: [0] },
+                    { x: 39, y: 28, plates: [0] },
+                    { x: 58, y: 11, plates: [1] },
+                    { x: 84, y: 11, plates: [1] },
+                    { x: 84, y: 28, plates: [1] },
+                    { x: 13, y: 51, plates: [2] },
+                    { x: 39, y: 51, plates: [2] },
+                    { x: 13, y: 68, plates: [2] },
+                    { x: 58, y: 51, plates: [3] },
+                    { x: 84, y: 51, plates: [3] },
+                    { x: 84, y: 68, plates: [3] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 5 – Complex overlaps ─────────────────────── */
+            {
+                plates: [
+                    P(5,  8,  55, 28, 2, 1),
+                    P(35, 22, 55, 28, 3, 2),
+                    P(10, 50, 40, 30, 1, 3),
+                    P(50, 55, 40, 28, 4, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 14, plates: [0] },
+                    { x: 52, y: 14, plates: [0] },
+                    { x: 13, y: 30, plates: [0] },
+                    { x: 52, y: 30, plates: [0, 1] },
+                    { x: 82, y: 28, plates: [1] },
+                    { x: 43, y: 43, plates: [1] },
+                    { x: 82, y: 43, plates: [1] },
+                    { x: 18, y: 56, plates: [2] },
+                    { x: 42, y: 56, plates: [2] },
+                    { x: 18, y: 73, plates: [2] },
+                    { x: 42, y: 73, plates: [2] },
+                    { x: 58, y: 61, plates: [3] },
+                    { x: 82, y: 61, plates: [3] },
+                    { x: 82, y: 76, plates: [3] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 6 – Dense 3-layer ────────────────────────── */
+            {
+                plates: [
+                    P(5,  5,  50, 30, 6, 1),
+                    P(42, 15, 50, 30, 0, 2),
+                    P(15, 38, 65, 28, 5, 3),
+                    P(20, 62, 55, 24, 7, 4),
+                ],
+                screwPositions: [
+                    { x: 13, y: 11, plates: [0] },
+                    { x: 47, y: 11, plates: [0] },
+                    { x: 13, y: 28, plates: [0] },
+                    { x: 47, y: 28, plates: [0, 1] },
+                    { x: 84, y: 21, plates: [1] },
+                    { x: 84, y: 38, plates: [1] },
+                    { x: 50, y: 38, plates: [1, 2] },
+                    { x: 23, y: 44, plates: [2] },
+                    { x: 72, y: 44, plates: [2] },
+                    { x: 23, y: 59, plates: [2] },
+                    { x: 72, y: 59, plates: [2] },
+                    { x: 28, y: 68, plates: [3] },
+                    { x: 67, y: 68, plates: [3] },
+                    { x: 28, y: 80, plates: [3] },
+                    { x: 67, y: 80, plates: [3] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 7 – Five plates ──────────────────────────── */
+            {
+                plates: [
+                    P(5,  2,  40, 22, 1, 1),
+                    P(50, 2,  40, 22, 3, 1),
+                    P(20, 20, 55, 26, 2, 2),
+                    P(5,  48, 42, 24, 4, 3),
+                    P(48, 52, 44, 24, 6, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 8,  plates: [0] },
+                    { x: 37, y: 8,  plates: [0] },
+                    { x: 13, y: 18, plates: [0] },
+                    { x: 58, y: 8,  plates: [1] },
+                    { x: 82, y: 8,  plates: [1] },
+                    { x: 82, y: 18, plates: [1] },
+                    { x: 37, y: 26, plates: [0, 2] },
+                    { x: 58, y: 26, plates: [1, 2] },
+                    { x: 28, y: 39, plates: [2] },
+                    { x: 67, y: 39, plates: [2] },
+                    { x: 13, y: 54, plates: [3] },
+                    { x: 39, y: 54, plates: [3] },
+                    { x: 13, y: 66, plates: [3] },
+                    { x: 39, y: 66, plates: [3] },
+                    { x: 56, y: 58, plates: [4] },
+                    { x: 84, y: 58, plates: [4] },
+                    { x: 84, y: 70, plates: [4] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 8 – Six plates with many shared screws ───── */
+            {
+                plates: [
+                    P(5,  2,  35, 22, 0, 1),
+                    P(38, 2,  28, 22, 5, 1),
+                    P(62, 2,  32, 22, 3, 1),
+                    P(10, 28, 38, 24, 7, 2),
+                    P(48, 28, 42, 24, 4, 2),
+                    P(18, 56, 60, 26, 2, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 8,  plates: [0] },
+                    { x: 32, y: 8,  plates: [0] },
+                    { x: 13, y: 18, plates: [0] },
+                    { x: 46, y: 8,  plates: [1] },
+                    { x: 58, y: 8,  plates: [1] },
+                    { x: 46, y: 18, plates: [1] },
+                    { x: 70, y: 8,  plates: [2] },
+                    { x: 86, y: 8,  plates: [2] },
+                    { x: 86, y: 18, plates: [2] },
+                    { x: 18, y: 34, plates: [3] },
+                    { x: 40, y: 34, plates: [3] },
+                    { x: 18, y: 45, plates: [3] },
+                    { x: 40, y: 45, plates: [3, 4] },
+                    { x: 56, y: 34, plates: [4] },
+                    { x: 82, y: 34, plates: [4] },
+                    { x: 82, y: 45, plates: [4] },
+                    { x: 26, y: 62, plates: [5] },
+                    { x: 70, y: 62, plates: [5] },
+                    { x: 26, y: 76, plates: [5] },
+                    { x: 70, y: 76, plates: [5] },
+                ],
+                holes: 7,
+            },
+        ];
+    }
+
+    const LEVELS = buildLevels();
+
+    /* ── DOM refs ────────────────────────────────────────────── */
+    const $board     = document.getElementById('board');
+    const $holesBar  = document.getElementById('holesBar');
+    const $levelBadge = document.getElementById('levelBadge');
+    const $startScreen = document.getElementById('startScreen');
+    const $winOverlay  = document.getElementById('winOverlay');
+    const $winMsg      = document.getElementById('winMsg');
+    const $gameOverOverlay = document.getElementById('gameOverOverlay');
+
+    /* ── State ───────────────────────────────────────────────── */
+    let currentLevel = 0;
+    let plates       = [];   // { ...def, removed }
+    let screws       = [];   // { x, y, plateIndices[], removed, el }
+    let holes        = [];   // { filled, color, el }
+    let selectedScrew = null;
+    let undoStack    = [];   // { screwIdx, holeIdx, platesBefore }
+    let busy         = false;
+
+    /* ── Initialise level ────────────────────────────────────── */
+    function initLevel(lvlIdx) {
+        if (lvlIdx >= LEVELS.length) lvlIdx = 0;   // wrap around
+        currentLevel = lvlIdx;
+        $levelBadge.textContent = 'Level ' + (lvlIdx + 1);
+
+        const def = LEVELS[lvlIdx];
+        $board.innerHTML = '';
+
+        // Build plates state
+        plates = def.plates.map(p => ({ ...p, removed: false }));
+
+        // Render plates
+        plates.forEach((p, i) => {
+            const el = document.createElement('div');
+            el.className = 'plate';
+            const c = COLORS[p.colorIdx % COLORS.length];
+            Object.assign(el.style, {
+                left:   p.x + '%',
+                top:    p.y + '%',
+                width:  p.w + '%',
+                height: p.h + '%',
+                background: c.fill,
+                border: '2.5px solid ' + c.border,
+                zIndex: p.zIndex,
+            });
+            el.dataset.idx = i;
+            $board.appendChild(el);
+            p.el = el;
+        });
+
+        // Build screws state
+        screws = def.screwPositions.map((s, i) => ({
+            x: s.x,
+            y: s.y,
+            plateIndices: [...s.plates],
+            removed: false,
+            el: null,
+        }));
+
+        // Render screws
+        screws.forEach((s, i) => {
+            const el = document.createElement('div');
+            el.className = 'screw';
+            el.style.left = 'calc(' + s.x + '% - 21px)';
+            el.style.top  = 'calc(' + s.y + '% - 21px)';
+            // colour ring = topmost plate colour
+            const topPlate = getTopmostPlateForScrew(s);
+            if (topPlate !== null) {
+                const ring = document.createElement('span');
+                ring.className = 'ring';
+                ring.style.color = COLORS[plates[topPlate].colorIdx % COLORS.length].ring;
+                el.appendChild(ring);
+            }
+            el.style.zIndex = 50 + (topPlate !== null ? plates[topPlate].zIndex : 0);
+            el.addEventListener('click', () => onScrewClick(i));
+            $board.appendChild(el);
+            s.el = el;
+        });
+
+        // Build holes
+        $holesBar.innerHTML = '';
+        holes = [];
+        for (let i = 0; i < def.holes; i++) {
+            const el = document.createElement('div');
+            el.className = 'hole';
+            el.addEventListener('click', () => onHoleClick(i));
+            $holesBar.appendChild(el);
+            holes.push({ filled: false, color: null, el });
+        }
+
+        selectedScrew = null;
+        undoStack = [];
+        busy = false;
+        updateScrewStates();
+    }
+
+    /* ── Determine topmost non-removed plate for a screw ─────── */
+    function getTopmostPlateForScrew(s) {
+        let top = null;
+        for (const pi of s.plateIndices) {
+            if (!plates[pi].removed) {
+                if (top === null || plates[pi].zIndex > plates[top].zIndex) top = pi;
+            }
+        }
+        return top;
+    }
+
+    /* ── Check if a screw is blocked (a plate above it hasn't been freed yet) */
+    function isScrewBlocked(screwIdx) {
+        const s = screws[screwIdx];
+        // A screw is blocked if any non-removed plate that it goes through
+        // has a higher-zIndex non-removed plate overlapping it on the board
+        // that does NOT share this screw.
+        // Simplified rule: the screw is accessible if all its remaining plates
+        // are on the topmost layer among all plates covering the screw position.
+        const topZ = getTopmostPlateForScrew(s);
+        if (topZ === null) return true; // already removed – shouldn't happen
+        const topZIndex = plates[topZ].zIndex;
+        // Check if any other plate (not in s.plateIndices) with higher z
+        // overlaps the screw position
+        for (let i = 0; i < plates.length; i++) {
+            if (plates[i].removed) continue;
+            if (s.plateIndices.includes(i)) continue;
+            if (plates[i].zIndex <= topZIndex) continue;
+            // does plate i cover the screw position?
+            if (
+                s.x >= plates[i].x && s.x <= plates[i].x + plates[i].w &&
+                s.y >= plates[i].y && s.y <= plates[i].y + plates[i].h
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /* ── Update visual state of screws (blocked / available) ─── */
+    function updateScrewStates() {
+        screws.forEach((s, i) => {
+            if (s.removed) {
+                s.el.style.display = 'none';
+                return;
+            }
+            s.el.style.display = '';
+            const blocked = isScrewBlocked(i);
+            s.el.classList.toggle('blocked', blocked);
+
+            // update ring colour
+            const ring = s.el.querySelector('.ring');
+            const topPlate = getTopmostPlateForScrew(s);
+            if (ring && topPlate !== null) {
+                ring.style.color = COLORS[plates[topPlate].colorIdx % COLORS.length].ring;
+            }
+            s.el.style.zIndex = 50 + (topPlate !== null ? plates[topPlate].zIndex : 0);
+        });
+    }
+
+    /* ── Screw click handler ─────────────────────────────────── */
+    function onScrewClick(idx) {
+        if (busy) return;
+        const s = screws[idx];
+        if (s.removed) return;
+        if (isScrewBlocked(idx)) return;
+
+        if (selectedScrew === idx) {
+            // deselect
+            s.el.classList.remove('selected');
+            selectedScrew = null;
+            return;
+        }
+        // deselect previous
+        if (selectedScrew !== null) {
+            screws[selectedScrew].el.classList.remove('selected');
+        }
+        selectedScrew = idx;
+        s.el.classList.add('selected');
+    }
+
+    /* ── Hole click handler ──────────────────────────────────── */
+    function onHoleClick(holeIdx) {
+        if (busy) return;
+        if (selectedScrew === null) return;
+        if (holes[holeIdx].filled) return;
+
+        const screwIdx = selectedScrew;
+        const s = screws[screwIdx];
+        s.el.classList.remove('selected');
+        selectedScrew = null;
+
+        // save undo info
+        const platesBefore = plates.map(p => p.removed);
+
+        busy = true;
+
+        // Animate screw to hole
+        animateScrewToHole(screwIdx, holeIdx, () => {
+            // Mark screw removed
+            s.removed = true;
+            s.el.style.display = 'none';
+
+            // Fill hole
+            const topPlate = getTopmostPlateForScrew(s);
+            // Use colour of the highest-z plate that was attached
+            let colorIdx = 0;
+            let maxZ = -1;
+            for (const pi of s.plateIndices) {
+                if (plates[pi].zIndex > maxZ && !platesBefore[pi]) {
+                    maxZ = plates[pi].zIndex;
+                    colorIdx = plates[pi].colorIdx;
+                }
+            }
+            fillHole(holeIdx, colorIdx);
+
+            // Check if any plate has all its screws removed
+            checkPlatesRemoved();
+            updateScrewStates();
+
+            undoStack.push({ screwIdx, holeIdx, platesBefore });
+
+            busy = false;
+
+            // Win check
+            if (plates.every(p => p.removed)) {
+                setTimeout(showWin, 350);
+                return;
+            }
+            // Game-over check: all holes filled but plates remain
+            if (holes.every(h => h.filled) && !plates.every(p => p.removed)) {
+                setTimeout(showGameOver, 350);
+            }
+        });
+    }
+
+    /* ── Animate screw flying to hole ────────────────────────── */
+    function animateScrewToHole(screwIdx, holeIdx, cb) {
+        const s = screws[screwIdx];
+        const sEl = s.el;
+        const hEl = holes[holeIdx].el;
+
+        const boardRect = $board.getBoundingClientRect();
+        const holeRect  = hEl.getBoundingClientRect();
+
+        // target position relative to board
+        const tx = holeRect.left + holeRect.width / 2 - boardRect.left - 21;
+        const ty = holeRect.top  + holeRect.height / 2 - boardRect.top - 21;
+
+        sEl.classList.add('animating');
+        sEl.style.left = tx + 'px';
+        sEl.style.top  = ty + 'px';
+        sEl.style.transform = 'scale(.7)';
+        sEl.style.opacity = '0';
+        sEl.style.zIndex = 999;
+
+        setTimeout(cb, 420);
+    }
+
+    /* ── Fill a hole visually ────────────────────────────────── */
+    function fillHole(holeIdx, colorIdx) {
+        const h = holes[holeIdx];
+        h.filled = true;
+        h.color = colorIdx;
+        const el = h.el;
+        el.classList.add('filled');
+        el.innerHTML = '';
+        const c = COLORS[colorIdx % COLORS.length];
+        const ringEl = document.createElement('span');
+        ringEl.className = 'ring-fill';
+        ringEl.style.color = c.ring;
+        el.appendChild(ringEl);
+        const head = document.createElement('span');
+        head.className = 'screw-head';
+        head.textContent = '+';
+        el.appendChild(head);
+    }
+
+    /* ── Check & remove plates whose screws are all gone ─────── */
+    function checkPlatesRemoved() {
+        plates.forEach((p, pi) => {
+            if (p.removed) return;
+            // does any non-removed screw reference this plate?
+            const hasScrew = screws.some(s => !s.removed && s.plateIndices.includes(pi));
+            if (!hasScrew) {
+                p.removed = true;
+                p.el.classList.add('removed');
+                // Free up holes that match this plate's colour (clear filled holes)
+                clearHolesForPlate(pi);
+            }
+        });
+    }
+
+    /* ── When a plate is removed, free its screws' holes ─────── */
+    function clearHolesForPlate(plateIdx) {
+        const cIdx = plates[plateIdx].colorIdx;
+        // Count how many screws belonged *only* to this plate
+        let countToFree = 0;
+        screws.forEach(s => {
+            if (s.removed && s.plateIndices.length === 1 && s.plateIndices[0] === plateIdx) {
+                countToFree++;
+            }
+            // For shared screws: also free if all their plates are now removed
+            if (s.removed && s.plateIndices.includes(plateIdx)) {
+                const allRemoved = s.plateIndices.every(pi => plates[pi].removed);
+                if (allRemoved) countToFree++;
+            }
+        });
+        // Remove duplicates counted
+        // Actually let's just free holes matching this plate colour
+        // up to countToFree. But simpler: free all holes whose colour matches.
+        // (Original game logic: when plate disappears, its screws vanish from holes)
+        let freed = 0;
+        for (let i = 0; i < holes.length && freed < countToFree; i++) {
+            if (holes[i].filled && holes[i].color === cIdx) {
+                unfillHole(i);
+                freed++;
+            }
+        }
+    }
+
+    function unfillHole(holeIdx) {
+        const h = holes[holeIdx];
+        h.filled = false;
+        h.color = null;
+        h.el.classList.remove('filled');
+        h.el.innerHTML = '';
+    }
+
+    /* ── Undo ────────────────────────────────────────────────── */
+    function undo() {
+        if (busy || undoStack.length === 0) return;
+        const action = undoStack.pop();
+        // Restore plates removed state
+        action.platesBefore.forEach((wasRemoved, i) => {
+            if (plates[i].removed !== wasRemoved) {
+                plates[i].removed = wasRemoved;
+                plates[i].el.classList.toggle('removed', wasRemoved);
+            }
+        });
+        // Restore screw
+        const s = screws[action.screwIdx];
+        s.removed = false;
+        s.el.style.display = '';
+        s.el.classList.remove('animating');
+        s.el.style.left = 'calc(' + s.x + '% - 21px)';
+        s.el.style.top  = 'calc(' + s.y + '% - 21px)';
+        s.el.style.transform = '';
+        s.el.style.opacity = '';
+        s.el.style.zIndex = '';
+
+        // Restore hole
+        unfillHole(action.holeIdx);
+
+        // Re-fill holes that were filled before (from other plates that were freed)
+        // Actually, we need to rebuild hole states from scratch – simplest: rebuild all holes
+        rebuildHoles();
+        updateScrewStates();
+    }
+
+    function rebuildHoles() {
+        // Clear all holes
+        holes.forEach((h, i) => unfillHole(i));
+        // Re-fill based on removed screws
+        let hi = 0;
+        screws.forEach(s => {
+            if (!s.removed) return;
+            if (hi >= holes.length) return;
+            let colorIdx = 0;
+            let maxZ = -1;
+            for (const pi of s.plateIndices) {
+                if (plates[pi].zIndex > maxZ) {
+                    maxZ = plates[pi].zIndex;
+                    colorIdx = plates[pi].colorIdx;
+                }
+            }
+            fillHole(hi, colorIdx);
+            hi++;
+        });
+    }
+
+    /* ── Win / Game-over ─────────────────────────────────────── */
+    function showWin() {
+        $winMsg.textContent = 'You cleared Level ' + (currentLevel + 1) + '!';
+        $winOverlay.classList.add('show');
+    }
+    function showGameOver() {
+        $gameOverOverlay.classList.add('show');
+    }
+
+    /* ── Event wiring ────────────────────────────────────────── */
+    document.getElementById('btnStart').addEventListener('click', () => {
+        $startScreen.style.display = 'none';
+        initLevel(0);
+    });
+    document.getElementById('btnRestart').addEventListener('click', () => {
+        $winOverlay.classList.remove('show');
+        $gameOverOverlay.classList.remove('show');
+        initLevel(currentLevel);
+    });
+    document.getElementById('btnUndo').addEventListener('click', undo);
+    document.getElementById('btnNext').addEventListener('click', () => {
+        $winOverlay.classList.remove('show');
+        initLevel(currentLevel + 1);
+    });
+    document.getElementById('btnRetry').addEventListener('click', () => {
+        $gameOverOverlay.classList.remove('show');
+        initLevel(currentLevel);
+    });
+
+    // Deselect screw when clicking board background
+    $board.addEventListener('click', (e) => {
+        if (e.target === $board && selectedScrew !== null) {
+            screws[selectedScrew].el.classList.remove('selected');
+            selectedScrew = null;
+        }
+    });
+})();
+</script>
+</body>
+</html>
