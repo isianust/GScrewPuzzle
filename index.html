@@ -126,7 +126,7 @@
                         transform .4s ease, opacity .35s ease;
         }
 
-        /* colour ring around screw matching plate */
+        /* color ring around screw matching plate */
         .screw .ring {
             position: absolute;
             width: 42px; height: 42px;
@@ -839,31 +839,25 @@
             if (!hasScrew) {
                 p.removed = true;
                 p.el.classList.add('removed');
-                // Free up holes that match this plate's colour (clear filled holes)
+                // Free up holes for this plate's screws
                 clearHolesForPlate(pi);
             }
         });
     }
 
-    /* ── When a plate is removed, free its screws' holes ─────── */
+    /* ── When a plate is removed, free its screws from the holes ── */
     function clearHolesForPlate(plateIdx) {
         const cIdx = plates[plateIdx].colorIdx;
-        // Count how many screws belonged *only* to this plate
+        // Count screws that were in holes and whose every plate is now removed
         let countToFree = 0;
         screws.forEach(s => {
-            if (s.removed && s.plateIndices.length === 1 && s.plateIndices[0] === plateIdx) {
+            if (!s.removed) return;
+            if (!s.plateIndices.includes(plateIdx)) return;
+            if (s.plateIndices.every(pi => plates[pi].removed)) {
                 countToFree++;
             }
-            // For shared screws: also free if all their plates are now removed
-            if (s.removed && s.plateIndices.includes(plateIdx)) {
-                const allRemoved = s.plateIndices.every(pi => plates[pi].removed);
-                if (allRemoved) countToFree++;
-            }
         });
-        // Remove duplicates counted
-        // Actually let's just free holes matching this plate colour
-        // up to countToFree. But simpler: free all holes whose colour matches.
-        // (Original game logic: when plate disappears, its screws vanish from holes)
+        // Free that many holes matching this plate's color
         let freed = 0;
         for (let i = 0; i < holes.length && freed < countToFree; i++) {
             if (holes[i].filled && holes[i].color === cIdx) {
