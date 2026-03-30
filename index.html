@@ -526,9 +526,10 @@
         const baseHue = Math.random() * 360;
         const hueStep = 360 / count;
         for (let i = 0; i < count; i++) {
+            // ±20% random hue variation to avoid exact even spacing
             const h = (baseHue + i * hueStep + (Math.random() * hueStep * 0.4 - hueStep * 0.2)) % 360;
-            const s = 65 + Math.random() * 25;
-            const l = 48 + Math.random() * 14;
+            const s = 65 + Math.random() * 25;  // saturation 65-90% for vibrant colors
+            const l = 48 + Math.random() * 14;  // lightness 48-62% for good visibility
             const rgb = hslToRgb(h, s, l);
             colors.push({
                 fill: `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.72)`,
@@ -762,8 +763,12 @@
 
     const LEVELS = buildLevels();
 
-    /* ── Screw half-size for positioning ─────────────────────── */
-    const SCREW_HALF = 26;
+    /* ── Layout constants ───────────────────────────────────── */
+    const SCREW_SIZE = 52;           // must match CSS .screw width
+    const SCREW_HALF = SCREW_SIZE / 2;
+    const DRAG_THRESHOLD_PX = 8;     // min px before drag starts (avoids accidental drags)
+    const HOLE_HIT_PADDING = 8;      // extra px around holes for easier drop targeting
+    const FREEZE_DURATION = 3;       // moves a plate stays frozen
 
     /* ── DOM refs ────────────────────────────────────────────── */
     const $board     = document.getElementById('board');
@@ -1106,7 +1111,7 @@
         enablePlateClicks(false);
         renderPowerupsBar();
 
-        frozenPlates[plateIdx] = 3;
+        frozenPlates[plateIdx] = FREEZE_DURATION;
         plates[plateIdx].el.classList.add('frozen');
         showToast('❄️ Plate frozen for 3 moves!');
     }
@@ -1546,7 +1551,7 @@
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         // Only start drag after a small threshold
-        if (!dragState.didDrag && dist < 8) return;
+        if (!dragState.didDrag && dist < DRAG_THRESHOLD_PX) return;
 
         if (!dragState.didDrag) {
             dragState.didDrag = true;
@@ -1643,7 +1648,7 @@
         for (let i = 0; i < holes.length; i++) {
             const rect = holes[i].el.getBoundingClientRect();
             // Slightly expand hit area for easier dropping
-            const pad = 8;
+            const pad = HOLE_HIT_PADDING;
             if (x >= rect.left - pad && x <= rect.right + pad &&
                 y >= rect.top - pad && y <= rect.bottom + pad) {
                 return i;
