@@ -766,9 +766,11 @@
     /* ── Layout constants ───────────────────────────────────── */
     const SCREW_SIZE = 52;           // must match CSS .screw width
     const SCREW_HALF = SCREW_SIZE / 2;
-    const DRAG_THRESHOLD_PX = 8;     // min px before drag starts (avoids accidental drags)
+    const DRAG_THRESHOLD_PX = 12;    // min px before drag starts (avoids accidental drags on touch)
     const HOLE_HIT_PADDING = 8;      // extra px around holes for easier drop targeting
     const FREEZE_DURATION = 3;       // moves a plate stays frozen
+    const SCREW_ANIM_MS = 420;       // must match CSS .screw.animating transition duration
+    const MIN_LEVEL_COLORS = 8;      // minimum number of colors generated per level
 
     /* ── DOM refs ────────────────────────────────────────────── */
     const $board     = document.getElementById('board');
@@ -875,7 +877,7 @@
 
     /* ── Power-up: Hint ─────────────────────────────────────── */
     function usePowerupHint() {
-        const bestIdx = findBestScrew();
+        const bestIdx = findFirstAvailableScrew();
         if (bestIdx === null) {
             showToast('🔍 No available screws to hint!');
             return;
@@ -888,7 +890,7 @@
         setTimeout(() => s.el.classList.remove('hint-glow'), 2000);
     }
 
-    function findBestScrew() {
+    function findFirstAvailableScrew() {
         for (let i = 0; i < screws.length; i++) {
             if (screws[i].removed) continue;
             if (isScrewBlocked(i)) continue;
@@ -979,7 +981,7 @@
 
     /* ── Power-up: Magnet ───────────────────────────────────── */
     function usePowerupMagnet() {
-        const screwIdx = findBestScrew();
+        const screwIdx = findFirstAvailableScrew();
         if (screwIdx === null) {
             showToast('🧲 No valid moves available!');
             return;
@@ -1117,7 +1119,7 @@
     }
 
     function decrementFreezeCounters() {
-        for (const pi in frozenPlates) {
+        for (const pi of Object.keys(frozenPlates)) {
             frozenPlates[pi]--;
             if (frozenPlates[pi] <= 0) {
                 delete frozenPlates[pi];
@@ -1167,7 +1169,7 @@
 
         // Generate fresh random colors for this level
         const numColors = def.plates.reduce((max, p) => Math.max(max, p.colorIdx + 1), 0);
-        levelColors = generateLevelColors(Math.max(numColors, 8));
+        levelColors = generateLevelColors(Math.max(numColors, MIN_LEVEL_COLORS));
 
         $board.innerHTML = '';
 
@@ -1399,7 +1401,7 @@
         sEl.style.opacity = '0';
         sEl.style.zIndex = 999;
 
-        setTimeout(cb, 420);
+        setTimeout(cb, SCREW_ANIM_MS);
     }
 
     /* ── Fill a hole visually ────────────────────────────────── */
