@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Screw Puzzle V2</title>
+    <style>
+        /* ── Reset & Global ─────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-start: #0f0c29;
+            --bg-mid:   #302b63;
+            --bg-end:   #24243e;
+            --panel-bg: rgba(255,255,255,0.06);
+            --text:     #eee;
+            --accent:   #f7b731;
+            --hole-bg:  #1a1a2e;
+            --shadow:   rgba(0,0,0,0.45);
+        }
+
+        html, body {
+            width: 100%; height: 100%;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-mid), var(--bg-end));
+            color: var(--text);
+            overflow: hidden;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            image-rendering: auto;
+        }
+
+        /* ── Layout ─────────────────────────────────────────────── */
+        #app {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: flex-start;
+            width: 100%; height: 100%;
+            max-width: 800px; margin: 0 auto;
+            padding: 12px 8px 8px;
+            position: relative;
+        }
+
+        /* ── Header ─────────────────────────────────────────────── */
+        .header {
+            width: 100%; display: flex;
+            align-items: center; justify-content: space-between;
+            padding: 4px 8px 10px;
+        }
+        .header h1 {
+            font-size: 1.45rem; font-weight: 700;
+            background: linear-gradient(90deg, #f7b731, #fc5c65);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: .5px;
+        }
+        .level-badge {
+            font-size: .85rem; font-weight: 600;
+            background: rgba(255,255,255,0.12); border-radius: 20px;
+            padding: 4px 14px;
+        }
+
+        /* ── Board ──────────────────────────────────────────────── */
+        .board-wrapper {
+            position: relative;
+            width: 100%; flex: 1 1 auto;
+            min-height: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .board {
+            position: relative;
+            width: 100%; max-width: 720px;
+            aspect-ratio: 1 / 1.05;
+        }
+
+        /* ── Plates ─────────────────────────────────────────────── */
+        .plate {
+            position: absolute;
+            border-radius: 18px;
+            transition: opacity .45s ease, transform .45s ease;
+            pointer-events: none;
+            box-shadow: 0 4px 22px var(--shadow), 0 1px 6px rgba(0,0,0,0.25);
+        }
+        .plate.removed {
+            opacity: 0;
+            transform: scale(.85) translateY(20px);
+        }
+        .plate.frozen {
+            outline: 3px solid rgba(150,220,255,0.7);
+            outline-offset: -2px;
+        }
+        .plate.frozen::after {
+            content: '❄️';
+            position: absolute; top: 4px; right: 6px;
+            font-size: 16px;
+            filter: drop-shadow(0 0 4px rgba(150,220,255,0.8));
+        }
+        .plate.bomb-target {
+            animation: bombFlash .35s ease-out;
+        }
+        @keyframes bombFlash {
+            0% { filter: brightness(3) saturate(0); transform: scale(1.05); }
+            100% { filter: brightness(1); transform: scale(1); }
+        }
+        .plate.exploding {
+            animation: explode .5s ease-out forwards;
+        }
+        @keyframes explode {
+            0% { opacity: 1; transform: scale(1); filter: brightness(2); }
+            50% { opacity: .6; transform: scale(1.15) rotate(3deg); filter: brightness(3) hue-rotate(40deg); }
+            100% { opacity: 0; transform: scale(.6) rotate(-5deg) translateY(30px); filter: brightness(0.5); }
+        }
+
+        /* ── Screws ─────────────────────────────────────────────── */
+        .screw {
+            position: absolute;
+            width: 52px; height: 52px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 50;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+            pointer-events: auto;
+        }
+        .screw::before {
+            content: '';
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ececec, #b8b8b8 55%, #909090 100%);
+            box-shadow: inset 0 2px 5px rgba(255,255,255,.5), inset 0 -2px 5px rgba(0,0,0,.25),
+                        0 3px 10px rgba(0,0,0,.4);
+            position: absolute;
+        }
+        .screw::after {
+            content: '+';
+            font-size: 24px; font-weight: 700;
+            color: #666;
+            z-index: 1;
+            text-shadow: 0 1px 0 rgba(255,255,255,.45);
+        }
+        .screw:hover { transform: scale(1.12); filter: brightness(1.1); }
+        .screw:active { transform: scale(.95); }
+        .screw.blocked { cursor: not-allowed; opacity: .55; }
+        .screw.selected {
+            transform: scale(1.22) translateY(-8px);
+            filter: brightness(1.2) drop-shadow(0 6px 14px rgba(247,183,49,.55));
+            z-index: 200;
+        }
+        .screw.animating {
+            transition: left .4s cubic-bezier(.4,0,.2,1),
+                        top .4s cubic-bezier(.4,0,.2,1),
+                        transform .4s ease, opacity .35s ease;
+        }
+        .screw.hint-glow {
+            animation: hintPulse 0.5s ease-in-out 4;
+        }
+        @keyframes hintPulse {
+            0%, 100% { filter: brightness(1) drop-shadow(0 0 6px rgba(247,183,49,0.3)); }
+            50% { filter: brightness(1.4) drop-shadow(0 0 18px rgba(247,183,49,0.9)); }
+        }
+        .screw.dragging {
+            transition: none !important;
+            z-index: 500 !important;
+            transform: scale(1.18);
+            filter: brightness(1.2) drop-shadow(0 8px 20px rgba(0,0,0,.5));
+        }
+        .screw.keyboard-focus {
+            outline: 3px solid var(--accent);
+            outline-offset: 3px;
+        }
+
+        /* color ring around screw matching plate */
+        .screw .ring {
+            position: absolute;
+            width: 52px; height: 52px;
+            border-radius: 50%;
+            border: 4px solid currentColor;
+            pointer-events: none;
+        }
+        .screw .ring.shuffle-anim {
+            animation: shuffleRing .5s ease;
+        }
+        @keyframes shuffleRing {
+            0% { transform: scale(1.3); opacity: 0.3; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ── Holes (slots at bottom) ────────────────────────────── */
+        .holes-bar {
+            width: 100%; max-width: 720px;
+            display: flex; justify-content: center; gap: 8px;
+            padding: 14px 0 6px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+        .hole {
+            width: 58px; height: 58px;
+            border-radius: 50%;
+            background: var(--hole-bg);
+            border: 2.5px dashed rgba(255,255,255,0.18);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: border-color .2s, transform .2s, background .2s, box-shadow .2s;
+            position: relative;
+        }
+        .hole:hover { border-color: var(--accent); transform: scale(1.08); }
+        .hole.drop-target {
+            border-color: var(--accent);
+            background: rgba(247,183,49,0.12);
+            box-shadow: 0 0 12px rgba(247,183,49,0.35);
+            transform: scale(1.08);
+        }
+        .hole.filled {
+            border-style: solid;
+            border-color: rgba(255,255,255,0.25);
+            cursor: default;
+        }
+        .hole.filled::before {
+            content: '+';
+            font-size: 22px; font-weight: 700; color: #999;
+        }
+        .hole.filled .ring-fill {
+            position: absolute; width: 50px; height: 50px;
+            border-radius: 50%;
+            border: 3.5px solid currentColor;
+        }
+        .hole.filled .screw-head {
+            width: 42px; height: 42px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ddd, #aaa 70%, #888);
+            box-shadow: inset 0 1px 3px rgba(255,255,255,.35), 0 1px 4px rgba(0,0,0,.3);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: 700; color: #666;
+        }
+        .hole.extra-hole {
+            border-color: rgba(247,183,49,0.35);
+            box-shadow: 0 0 8px rgba(247,183,49,0.15);
+        }
+        .hole.keyboard-focus {
+            outline: 3px solid var(--accent);
+            outline-offset: 3px;
+        }
+
+        /* ── Drag Ghost ────────────────────────────────────────── */
+        .drag-ghost {
+            position: fixed;
+            width: 52px; height: 52px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10000;
+            opacity: 0.8;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .drag-ghost::before {
+            content: '';
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ececec, #b8b8b8 55%, #909090);
+            box-shadow: 0 4px 16px rgba(0,0,0,.4);
+            position: absolute;
+        }
+        .drag-ghost::after {
+            content: '+';
+            font-size: 24px; font-weight: 700;
+            color: #666;
+            z-index: 1;
+        }
+        .drag-ghost .ring {
+            position: absolute;
+            width: 52px; height: 52px;
+            border-radius: 50%;
+            border: 4px solid currentColor;
+            pointer-events: none;
+        }
+
+        /* ── Buttons ────────────────────────────────────────────── */
+        .btn-row {
+            display: flex; gap: 10px; padding: 6px 0 6px;
+        }
+        .btn {
+            padding: 8px 22px; border: none; border-radius: 28px;
+            font-size: .9rem; font-weight: 600; cursor: pointer;
+            background: rgba(255,255,255,0.12); color: var(--text);
+            transition: background .2s, transform .15s;
+            backdrop-filter: blur(4px);
+        }
+        .btn:hover { background: rgba(255,255,255,0.22); transform: scale(1.04); }
+        .btn:active { transform: scale(.96); }
+        .btn-primary {
+            background: linear-gradient(135deg, #f7b731, #fc5c65);
+            color: #fff;
+        }
+
+        /* ── Power-ups Bar ─────────────────────────────────────── */
+        .powerups-bar {
+            display: flex; gap: 6px; padding: 4px 0 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            max-width: 720px;
+        }
+        .powerup-btn {
+            position: relative;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            width: 52px; height: 52px;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 14px;
+            background: rgba(255,255,255,0.08);
+            cursor: pointer;
+            transition: background .2s, transform .15s, border-color .2s, opacity .2s;
+            font-size: 22px;
+            backdrop-filter: blur(4px);
+        }
+        .powerup-btn:hover:not(.disabled) {
+            background: rgba(255,255,255,0.18);
+            transform: scale(1.08);
+            border-color: var(--accent);
+        }
+        .powerup-btn:active:not(.disabled) { transform: scale(.94); }
+        .powerup-btn.disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            filter: grayscale(0.7);
+        }
+        .powerup-btn.active {
+            border-color: var(--accent);
+            background: rgba(247,183,49,0.2);
+            box-shadow: 0 0 10px rgba(247,183,49,0.3);
+        }
+        .powerup-badge {
+            position: absolute; top: -5px; right: -5px;
+            background: linear-gradient(135deg, #f7b731, #fc5c65);
+            color: #fff; font-size: 11px; font-weight: 700;
+            width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,.3);
+        }
+        .powerup-badge.empty { background: #555; }
+
+        /* ── Toast ──────────────────────────────────────────────── */
+        .toast {
+            position: fixed; top: 60px; left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(30,28,60,0.95);
+            color: #fff; padding: 10px 22px;
+            border-radius: 12px; font-size: .9rem;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0,0,0,.5);
+            border: 1px solid rgba(247,183,49,0.3);
+            z-index: 2000;
+            opacity: 0; pointer-events: none;
+            transition: opacity .25s, transform .25s;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ── Overlay / modal ────────────────────────────────────── */
+        .overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.65);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+            opacity: 0; pointer-events: none;
+            transition: opacity .3s ease;
+        }
+        .overlay.show { opacity: 1; pointer-events: auto; }
+        .modal {
+            background: linear-gradient(145deg, #2d2b55, #1f1d47);
+            border-radius: 24px; padding: 32px 28px;
+            text-align: center; min-width: 260px;
+            box-shadow: 0 12px 48px rgba(0,0,0,.5);
+            transform: scale(.88); transition: transform .3s ease;
+        }
+        .overlay.show .modal { transform: scale(1); }
+        .modal h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .modal p  { font-size: .95rem; color: #bbb; margin-bottom: 18px; }
+        .modal .stars { font-size: 2rem; margin-bottom: 12px; }
+
+        /* ── Start screen ───────────────────────────────────────── */
+        .start-screen {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 900; gap: 18px;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-mid), var(--bg-end));
+        }
+        .start-screen h1 {
+            font-size: 2.6rem; font-weight: 800;
+            background: linear-gradient(90deg, #f7b731, #fc5c65, #f7b731);
+            background-size: 200% auto;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s linear infinite;
+        }
+        @keyframes shimmer { to { background-position: 200% center; } }
+        .start-screen p { color: #aaa; font-size: 1rem; max-width: 320px; text-align: center; }
+        .start-screen .screw-icon {
+            width: 90px; height: 90px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #e8e8e8, #aaa 60%, #777);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 48px; font-weight: 700; color: #555;
+            box-shadow: 0 6px 32px rgba(0,0,0,.45);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        /* ── Game-over overlay ──────────────────────────────────── */
+        .game-over-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.7);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; opacity: 0; pointer-events: none;
+            transition: opacity .35s;
+        }
+        .game-over-overlay.show { opacity: 1; pointer-events: auto; }
+
+        /* ── Explosion particles ───────────────────────────────── */
+        .explosion-particle {
+            position: absolute;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 999;
+            animation: particleFly .6s ease-out forwards;
+        }
+        @keyframes particleFly {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.3); }
+        }
+
+        /* ── Responsive ─────────────────────────────────────────── */
+        @media (max-width: 400px) {
+            .screw { width: 40px; height: 40px; }
+            .screw::before { width: 34px; height: 34px; }
+            .screw .ring { width: 40px; height: 40px; }
+            .screw::after { font-size: 18px; }
+            .hole { width: 48px; height: 48px; }
+            .hole.filled .ring-fill { width: 40px; height: 40px; }
+            .hole.filled .screw-head { width: 34px; height: 34px; }
+            .powerup-btn { width: 44px; height: 44px; font-size: 18px; }
+            .drag-ghost { width: 40px; height: 40px; }
+            .drag-ghost::before { width: 34px; height: 34px; }
+            .drag-ghost .ring { width: 40px; height: 40px; }
+        }
+        @media (min-width: 768px) {
+            #app { padding-top: 24px; }
+            .header h1 { font-size: 1.7rem; }
+        }
+        @media (min-width: 1024px) {
+            .board { max-width: 680px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- Start screen -->
+    <div class="start-screen" id="startScreen">
+        <div class="screw-icon">+</div>
+        <h1>Screw Puzzle V2</h1>
+        <p>Unscrew the bolts and free the plates! Tap or drag a screw to an empty hole. Use power-ups when you're stuck!</p>
+        <button class="btn btn-primary" id="btnStart" style="font-size:1.05rem;padding:12px 38px;margin-top:8px;">Play</button>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>Screw Puzzle V2</h1>
+        <span class="level-badge" id="levelBadge">Level 1</span>
+    </div>
+
+    <!-- Board area -->
+    <div class="board-wrapper">
+        <div class="board" id="board"></div>
+    </div>
+
+    <!-- Holes bar -->
+    <div class="holes-bar" id="holesBar"></div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+        <button class="btn" id="btnRestart">↻ Restart</button>
+        <button class="btn" id="btnUndo">↩ Undo</button>
+    </div>
+
+    <!-- Power-ups bar -->
+    <div class="powerups-bar" id="powerupsBar"></div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<!-- Win overlay -->
+<div class="overlay" id="winOverlay">
+    <div class="modal">
+        <div class="stars">⭐⭐⭐</div>
+        <h2>Level Complete!</h2>
+        <p id="winMsg">Great job!</p>
+        <button class="btn btn-primary" id="btnNext" style="margin-top:4px;">Next Level ▸</button>
+    </div>
+</div>
+
+<!-- Game-over overlay -->
+<div class="game-over-overlay" id="gameOverOverlay">
+    <div class="modal">
+        <h2>😵 No More Moves!</h2>
+        <p>All holes are full. Try again!</p>
+        <button class="btn btn-primary" id="btnRetry" style="margin-top:4px;">Retry</button>
+    </div>
+</div>
+
+<script>
+/* ====================================================================
+   Screw Puzzle V2 – Game Logic
+   ==================================================================== */
+(() => {
+    'use strict';
+
+    /* ── Random color generation (24-bit RGB / ~14M+ colors) ───── */
+    function generateLevelColors(count) {
+        const colors = [];
+        const baseHue = Math.random() * 360;
+        const hueStep = 360 / count;
+        for (let i = 0; i < count; i++) {
+            const h = (baseHue + i * hueStep + (Math.random() * hueStep * 0.4 - hueStep * 0.2)) % 360;
+            const s = 65 + Math.random() * 25;
+            const l = 48 + Math.random() * 14;
+            const rgb = hslToRgb(h, s, l);
+            colors.push({
+                fill: `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.72)`,
+                border: `hsl(${h}, ${s}%, ${l}%)`,
+                ring: `hsl(${h}, ${s}%, ${l}%)`,
+            });
+        }
+        return colors;
+    }
+
+    function hslToRgb(h, s, l) {
+        s /= 100; l /= 100;
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+        const m = l - c / 2;
+        let r, g, b;
+        if (h < 60)      { r = c; g = x; b = 0; }
+        else if (h < 120) { r = x; g = c; b = 0; }
+        else if (h < 180) { r = 0; g = c; b = x; }
+        else if (h < 240) { r = 0; g = x; b = c; }
+        else if (h < 300) { r = x; g = 0; b = c; }
+        else              { r = c; g = 0; b = x; }
+        return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+    }
+
+    let levelColors = [];
+
+    /* ── Level definitions ──────────────────────────────────────── */
+    function buildLevels() {
+        const P = (x, y, w, h, ci, z) => ({ x, y, w, h, colorIdx: ci, zIndex: z });
+
+        return [
+            /* ── Level 1 – Tutorial (2 plates, easy) ────────────── */
+            {
+                plates: [
+                    P(10, 25, 38, 32, 0, 1),
+                    P(52, 25, 38, 32, 1, 2),
+                ],
+                screwPositions: [
+                    { x: 18, y: 30, plates: [0] },
+                    { x: 40, y: 30, plates: [0] },
+                    { x: 60, y: 30, plates: [1] },
+                    { x: 82, y: 30, plates: [1] },
+                    { x: 18, y: 50, plates: [0] },
+                    { x: 82, y: 50, plates: [1] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 2 – Overlap (2 plates share a screw) ─────── */
+            {
+                plates: [
+                    P(8, 20, 50, 35, 0, 1),
+                    P(42, 30, 50, 35, 1, 2),
+                ],
+                screwPositions: [
+                    { x: 16, y: 26, plates: [0] },
+                    { x: 50, y: 26, plates: [0] },
+                    { x: 16, y: 48, plates: [0] },
+                    { x: 50, y: 48, plates: [0, 1] },
+                    { x: 84, y: 36, plates: [1] },
+                    { x: 84, y: 58, plates: [1] },
+                    { x: 50, y: 58, plates: [1] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 3 – Three plates stacked ─────────────────── */
+            {
+                plates: [
+                    P(5, 10, 44, 35, 0, 1),
+                    P(30, 25, 44, 35, 1, 2),
+                    P(50, 42, 44, 35, 2, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 16, plates: [0] },
+                    { x: 41, y: 16, plates: [0] },
+                    { x: 13, y: 38, plates: [0] },
+                    { x: 41, y: 38, plates: [0, 1] },
+                    { x: 66, y: 31, plates: [1] },
+                    { x: 38, y: 53, plates: [1] },
+                    { x: 66, y: 53, plates: [1, 2] },
+                    { x: 58, y: 48, plates: [2] },
+                    { x: 86, y: 48, plates: [2] },
+                    { x: 86, y: 70, plates: [2] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 4 – Four plates ──────────────────────────── */
+            {
+                plates: [
+                    P(5,  5,  42, 30, 0, 1),
+                    P(50, 5,  42, 30, 1, 1),
+                    P(5,  45, 42, 30, 2, 2),
+                    P(50, 45, 42, 30, 3, 2),
+                ],
+                screwPositions: [
+                    { x: 13, y: 11, plates: [0] },
+                    { x: 39, y: 11, plates: [0] },
+                    { x: 13, y: 28, plates: [0] },
+                    { x: 39, y: 28, plates: [0] },
+                    { x: 58, y: 11, plates: [1] },
+                    { x: 84, y: 11, plates: [1] },
+                    { x: 84, y: 28, plates: [1] },
+                    { x: 13, y: 51, plates: [2] },
+                    { x: 39, y: 51, plates: [2] },
+                    { x: 13, y: 68, plates: [2] },
+                    { x: 58, y: 51, plates: [3] },
+                    { x: 84, y: 51, plates: [3] },
+                    { x: 84, y: 68, plates: [3] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 5 – Complex overlaps ─────────────────────── */
+            {
+                plates: [
+                    P(5,  8,  55, 28, 0, 1),
+                    P(35, 22, 55, 28, 1, 2),
+                    P(10, 50, 40, 30, 2, 3),
+                    P(50, 55, 40, 28, 3, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 14, plates: [0] },
+                    { x: 52, y: 14, plates: [0] },
+                    { x: 13, y: 30, plates: [0] },
+                    { x: 52, y: 30, plates: [0, 1] },
+                    { x: 82, y: 28, plates: [1] },
+                    { x: 43, y: 43, plates: [1] },
+                    { x: 82, y: 43, plates: [1] },
+                    { x: 18, y: 56, plates: [2] },
+                    { x: 42, y: 56, plates: [2] },
+                    { x: 18, y: 73, plates: [2] },
+                    { x: 42, y: 73, plates: [2] },
+                    { x: 58, y: 61, plates: [3] },
+                    { x: 82, y: 61, plates: [3] },
+                    { x: 82, y: 76, plates: [3] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 6 – Dense 3-layer ────────────────────────── */
+            {
+                plates: [
+                    P(5,  5,  50, 30, 0, 1),
+                    P(42, 15, 50, 30, 1, 2),
+                    P(15, 38, 65, 28, 2, 3),
+                    P(20, 62, 55, 24, 3, 4),
+                ],
+                screwPositions: [
+                    { x: 13, y: 11, plates: [0] },
+                    { x: 47, y: 11, plates: [0] },
+                    { x: 13, y: 28, plates: [0] },
+                    { x: 47, y: 28, plates: [0, 1] },
+                    { x: 84, y: 21, plates: [1] },
+                    { x: 84, y: 38, plates: [1] },
+                    { x: 50, y: 38, plates: [1, 2] },
+                    { x: 23, y: 44, plates: [2] },
+                    { x: 72, y: 44, plates: [2] },
+                    { x: 23, y: 59, plates: [2] },
+                    { x: 72, y: 59, plates: [2] },
+                    { x: 28, y: 68, plates: [3] },
+                    { x: 67, y: 68, plates: [3] },
+                    { x: 28, y: 80, plates: [3] },
+                    { x: 67, y: 80, plates: [3] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 7 – Five plates ──────────────────────────── */
+            {
+                plates: [
+                    P(5,  2,  40, 22, 0, 1),
+                    P(50, 2,  40, 22, 1, 1),
+                    P(20, 20, 55, 26, 2, 2),
+                    P(5,  48, 42, 24, 3, 3),
+                    P(48, 52, 44, 24, 4, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 8,  plates: [0] },
+                    { x: 37, y: 8,  plates: [0] },
+                    { x: 13, y: 18, plates: [0] },
+                    { x: 58, y: 8,  plates: [1] },
+                    { x: 82, y: 8,  plates: [1] },
+                    { x: 82, y: 18, plates: [1] },
+                    { x: 37, y: 26, plates: [0, 2] },
+                    { x: 58, y: 26, plates: [1, 2] },
+                    { x: 28, y: 39, plates: [2] },
+                    { x: 67, y: 39, plates: [2] },
+                    { x: 13, y: 54, plates: [3] },
+                    { x: 39, y: 54, plates: [3] },
+                    { x: 13, y: 66, plates: [3] },
+                    { x: 39, y: 66, plates: [3] },
+                    { x: 56, y: 58, plates: [4] },
+                    { x: 84, y: 58, plates: [4] },
+                    { x: 84, y: 70, plates: [4] },
+                ],
+                holes: 7,
+            },
+            /* ── Level 8 – Six plates with many shared screws ───── */
+            {
+                plates: [
+                    P(5,  2,  35, 22, 0, 1),
+                    P(38, 2,  28, 22, 1, 1),
+                    P(62, 2,  32, 22, 2, 1),
+                    P(10, 28, 38, 24, 3, 2),
+                    P(48, 28, 42, 24, 4, 2),
+                    P(18, 56, 60, 26, 5, 3),
+                ],
+                screwPositions: [
+                    { x: 13, y: 8,  plates: [0] },
+                    { x: 32, y: 8,  plates: [0] },
+                    { x: 13, y: 18, plates: [0] },
+                    { x: 46, y: 8,  plates: [1] },
+                    { x: 58, y: 8,  plates: [1] },
+                    { x: 46, y: 18, plates: [1] },
+                    { x: 70, y: 8,  plates: [2] },
+                    { x: 86, y: 8,  plates: [2] },
+                    { x: 86, y: 18, plates: [2] },
+                    { x: 18, y: 34, plates: [3] },
+                    { x: 40, y: 34, plates: [3] },
+                    { x: 18, y: 45, plates: [3] },
+                    { x: 40, y: 45, plates: [3, 4] },
+                    { x: 56, y: 34, plates: [4] },
+                    { x: 82, y: 34, plates: [4] },
+                    { x: 82, y: 45, plates: [4] },
+                    { x: 26, y: 62, plates: [5] },
+                    { x: 70, y: 62, plates: [5] },
+                    { x: 26, y: 76, plates: [5] },
+                    { x: 70, y: 76, plates: [5] },
+                ],
+                holes: 7,
+            },
+        ];
+    }
+
+    const LEVELS = buildLevels();
+
+    /* ── Screw half-size for positioning ─────────────────────── */
+    const SCREW_HALF = 26;
+
+    /* ── DOM refs ────────────────────────────────────────────── */
+    const $board     = document.getElementById('board');
+    const $holesBar  = document.getElementById('holesBar');
+    const $levelBadge = document.getElementById('levelBadge');
+    const $startScreen = document.getElementById('startScreen');
+    const $winOverlay  = document.getElementById('winOverlay');
+    const $winMsg      = document.getElementById('winMsg');
+    const $gameOverOverlay = document.getElementById('gameOverOverlay');
+    const $powerupsBar = document.getElementById('powerupsBar');
+    const $toast       = document.getElementById('toast');
+
+    /* ── State ───────────────────────────────────────────────── */
+    let currentLevel = 0;
+    let plates       = [];
+    let screws       = [];
+    let holes        = [];
+    let selectedScrew = null;
+    let undoStack    = [];
+    let busy         = false;
+
+    /* ── Drag state ─────────────────────────────────────────── */
+    let dragState = null;
+    let dragGhost = null;
+
+    /* ── Keyboard navigation state ──────────────────────────── */
+    let kbMode = 'screws'; // 'screws' or 'holes'
+    let kbIndex = -1;
+
+    /* ── Power-up state ─────────────────────────────────────── */
+    const POWERUP_DEFS = [
+        { id: 'hint',    emoji: '🔍', name: 'Hint',       maxUses: 3 },
+        { id: 'bomb',    emoji: '💣', name: 'Bomb',       maxUses: 1 },
+        { id: 'magnet',  emoji: '🧲', name: 'Magnet',     maxUses: 2 },
+        { id: 'extra',   emoji: '🕳️', name: 'Extra Hole', maxUses: 2 },
+        { id: 'shuffle', emoji: '🔀', name: 'Shuffle',    maxUses: 1 },
+        { id: 'freeze',  emoji: '❄️', name: 'Freeze',     maxUses: 2 },
+    ];
+    let powerups = {};
+    let activePowerup = null; // 'bomb' or 'freeze' when waiting for plate click
+    let frozenPlates = {};    // plateIdx -> movesRemaining
+    let extraHolesCount = 0;
+
+    /* ── Toast notification ─────────────────────────────────── */
+    let toastTimer = null;
+    function showToast(msg) {
+        $toast.textContent = msg;
+        $toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => $toast.classList.remove('show'), 2000);
+    }
+
+    /* ── Power-ups bar rendering ────────────────────────────── */
+    function initPowerups() {
+        powerups = {};
+        POWERUP_DEFS.forEach(d => { powerups[d.id] = d.maxUses; });
+        activePowerup = null;
+        frozenPlates = {};
+        extraHolesCount = 0;
+        renderPowerupsBar();
+    }
+
+    function renderPowerupsBar() {
+        $powerupsBar.innerHTML = '';
+        POWERUP_DEFS.forEach(d => {
+            const btn = document.createElement('button');
+            btn.className = 'powerup-btn';
+            if (powerups[d.id] <= 0) btn.classList.add('disabled');
+            if (activePowerup === d.id) btn.classList.add('active');
+            btn.title = d.name;
+            btn.innerHTML = d.emoji;
+
+            const badge = document.createElement('span');
+            badge.className = 'powerup-badge';
+            if (powerups[d.id] <= 0) badge.classList.add('empty');
+            badge.textContent = powerups[d.id];
+            btn.appendChild(badge);
+
+            btn.addEventListener('click', () => onPowerupClick(d.id));
+            $powerupsBar.appendChild(btn);
+        });
+    }
+
+    function onPowerupClick(id) {
+        if (busy) return;
+        if (powerups[id] <= 0) return;
+
+        // Cancel any existing active powerup mode
+        if (activePowerup) {
+            activePowerup = null;
+            enablePlateClicks(false);
+            renderPowerupsBar();
+        }
+
+        switch (id) {
+            case 'hint':   usePowerupHint(); break;
+            case 'bomb':   activateBombMode(); break;
+            case 'magnet': usePowerupMagnet(); break;
+            case 'extra':  usePowerupExtraHole(); break;
+            case 'shuffle': usePowerupShuffle(); break;
+            case 'freeze': activateFreezeMode(); break;
+        }
+    }
+
+    /* ── Power-up: Hint ─────────────────────────────────────── */
+    function usePowerupHint() {
+        const bestIdx = findBestScrew();
+        if (bestIdx === null) {
+            showToast('🔍 No available screws to hint!');
+            return;
+        }
+        powerups.hint--;
+        renderPowerupsBar();
+        showToast('🔍 Hint: Move the glowing screw!');
+        const s = screws[bestIdx];
+        s.el.classList.add('hint-glow');
+        setTimeout(() => s.el.classList.remove('hint-glow'), 2000);
+    }
+
+    function findBestScrew() {
+        for (let i = 0; i < screws.length; i++) {
+            if (screws[i].removed) continue;
+            if (isScrewBlocked(i)) continue;
+            return i;
+        }
+        return null;
+    }
+
+    /* ── Power-up: Bomb ─────────────────────────────────────── */
+    function activateBombMode() {
+        activePowerup = 'bomb';
+        renderPowerupsBar();
+        showToast('💣 Bomb activated! Tap a plate.');
+        enablePlateClicks(true);
+    }
+
+    function useBombOnPlate(plateIdx) {
+        if (frozenPlates[plateIdx] > 0) {
+            showToast('❄️ This plate is frozen!');
+            activePowerup = null;
+            enablePlateClicks(false);
+            renderPowerupsBar();
+            return;
+        }
+        powerups.bomb--;
+        activePowerup = null;
+        enablePlateClicks(false);
+        renderPowerupsBar();
+        busy = true;
+
+        const p = plates[plateIdx];
+        // Spawn explosion particles
+        spawnExplosion(p);
+        p.el.classList.add('exploding');
+
+        setTimeout(() => {
+            // Remove all screws on this plate (they disappear, don't go to holes)
+            screws.forEach((s, si) => {
+                if (s.removed) return;
+                if (s.plateIndices.includes(plateIdx)) {
+                    // Remove from this plate
+                    s.plateIndices = s.plateIndices.filter(pi => pi !== plateIdx);
+                    if (s.plateIndices.length === 0 || s.plateIndices.every(pi => plates[pi].removed)) {
+                        s.removed = true;
+                        s.el.style.display = 'none';
+                    }
+                }
+            });
+
+            p.removed = true;
+            p.el.classList.add('removed');
+            checkPlatesRemoved();
+            updateScrewStates();
+            busy = false;
+
+            if (plates.every(pp => pp.removed)) {
+                setTimeout(showWin, 350);
+                return;
+            }
+            decrementFreezeCounters();
+        }, 500);
+    }
+
+    function spawnExplosion(plate) {
+        const rect = plate.el.getBoundingClientRect();
+        const boardRect = $board.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2 - boardRect.left;
+        const cy = rect.top + rect.height / 2 - boardRect.top;
+        for (let i = 0; i < 12; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'explosion-particle';
+            const angle = (i / 12) * Math.PI * 2;
+            const dist = 40 + Math.random() * 60;
+            const tx = cx + Math.cos(angle) * dist;
+            const ty = cy + Math.sin(angle) * dist;
+            const colors = ['#ff6b35', '#f7b731', '#fc5c65', '#ff9f43', '#fff'];
+            particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.left = cx + 'px';
+            particle.style.top = cy + 'px';
+            particle.style.setProperty('--tx', tx + 'px');
+            particle.style.setProperty('--ty', ty + 'px');
+            particle.style.animation = `particleFly .6s ease-out forwards`;
+            particle.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+            $board.appendChild(particle);
+            setTimeout(() => particle.remove(), 650);
+        }
+    }
+
+    /* ── Power-up: Magnet ───────────────────────────────────── */
+    function usePowerupMagnet() {
+        const screwIdx = findBestScrew();
+        if (screwIdx === null) {
+            showToast('🧲 No valid moves available!');
+            return;
+        }
+        const holeIdx = holes.findIndex(h => !h.filled);
+        if (holeIdx === -1) {
+            showToast('🧲 No empty holes!');
+            return;
+        }
+        powerups.magnet--;
+        renderPowerupsBar();
+        showToast('🧲 Magnet: Auto-moving screw!');
+
+        // Deselect any selected screw
+        if (selectedScrew !== null) {
+            screws[selectedScrew].el.classList.remove('selected');
+            selectedScrew = null;
+        }
+
+        const platesBefore = plates.map(p => p.removed);
+        busy = true;
+
+        animateScrewToHole(screwIdx, holeIdx, () => {
+            const s = screws[screwIdx];
+            s.removed = true;
+            s.el.style.display = 'none';
+
+            let colorIdx = 0;
+            let maxZ = -1;
+            for (const pi of s.plateIndices) {
+                if (plates[pi].zIndex > maxZ && !platesBefore[pi]) {
+                    maxZ = plates[pi].zIndex;
+                    colorIdx = plates[pi].colorIdx;
+                }
+            }
+            fillHole(holeIdx, colorIdx);
+            checkPlatesRemoved();
+            updateScrewStates();
+            undoStack.push({ screwIdx, holeIdx, platesBefore });
+            busy = false;
+
+            if (plates.every(p => p.removed)) {
+                setTimeout(showWin, 350);
+                return;
+            }
+            if (holes.every(h => h.filled) && !plates.every(p => p.removed)) {
+                setTimeout(showGameOver, 350);
+            }
+            decrementFreezeCounters();
+        });
+    }
+
+    /* ── Power-up: Extra Hole ───────────────────────────────── */
+    function usePowerupExtraHole() {
+        powerups.extra--;
+        extraHolesCount++;
+        renderPowerupsBar();
+        showToast('🕳️ Extra hole added!');
+
+        const el = document.createElement('div');
+        el.className = 'hole extra-hole';
+        const holeIdx = holes.length;
+        el.addEventListener('click', () => onHoleClick(holeIdx));
+        $holesBar.appendChild(el);
+        holes.push({ filled: false, color: null, el });
+    }
+
+    /* ── Power-up: Shuffle ──────────────────────────────────── */
+    function usePowerupShuffle() {
+        // Collect non-removed, non-frozen screws
+        const eligibleScrews = [];
+        screws.forEach((s, i) => {
+            if (s.removed) return;
+            // Check if any plate of this screw is frozen
+            const hasFrozenPlate = s.plateIndices.some(pi => frozenPlates[pi] > 0);
+            if (hasFrozenPlate) return;
+            eligibleScrews.push(i);
+        });
+
+        if (eligibleScrews.length < 2) {
+            showToast('🔀 Not enough screws to shuffle!');
+            return;
+        }
+
+        powerups.shuffle--;
+        renderPowerupsBar();
+        showToast('🔀 Screws shuffled!');
+
+        // Collect the plate associations of eligible screws, then shuffle them
+        const plateAssociations = eligibleScrews.map(i => [...screws[i].plateIndices]);
+        // Fisher-Yates shuffle
+        for (let i = plateAssociations.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [plateAssociations[i], plateAssociations[j]] = [plateAssociations[j], plateAssociations[i]];
+        }
+
+        // Reassign
+        eligibleScrews.forEach((si, idx) => {
+            screws[si].plateIndices = plateAssociations[idx];
+            // Animate ring color change
+            const ring = screws[si].el.querySelector('.ring');
+            if (ring) {
+                ring.classList.add('shuffle-anim');
+                setTimeout(() => ring.classList.remove('shuffle-anim'), 500);
+            }
+        });
+
+        updateScrewStates();
+        decrementFreezeCounters();
+    }
+
+    /* ── Power-up: Freeze ───────────────────────────────────── */
+    function activateFreezeMode() {
+        activePowerup = 'freeze';
+        renderPowerupsBar();
+        showToast('❄️ Freeze activated! Tap a plate.');
+        enablePlateClicks(true);
+    }
+
+    function useFreezeOnPlate(plateIdx) {
+        if (plates[plateIdx].removed) {
+            activePowerup = null;
+            enablePlateClicks(false);
+            renderPowerupsBar();
+            return;
+        }
+        powerups.freeze--;
+        activePowerup = null;
+        enablePlateClicks(false);
+        renderPowerupsBar();
+
+        frozenPlates[plateIdx] = 3;
+        plates[plateIdx].el.classList.add('frozen');
+        showToast('❄️ Plate frozen for 3 moves!');
+    }
+
+    function decrementFreezeCounters() {
+        for (const pi in frozenPlates) {
+            frozenPlates[pi]--;
+            if (frozenPlates[pi] <= 0) {
+                delete frozenPlates[pi];
+                if (plates[pi] && plates[pi].el) {
+                    plates[pi].el.classList.remove('frozen');
+                }
+            }
+        }
+    }
+
+    /* ── Enable/disable plate clicking for bomb/freeze ──────── */
+    function enablePlateClicks(enable) {
+        plates.forEach((p, i) => {
+            if (p.removed) return;
+            if (enable) {
+                p.el.style.pointerEvents = 'auto';
+                p.el.style.cursor = 'pointer';
+                p.el._clickHandler = () => onPlateClick(i);
+                p.el.addEventListener('click', p.el._clickHandler);
+            } else {
+                p.el.style.pointerEvents = 'none';
+                p.el.style.cursor = '';
+                if (p.el._clickHandler) {
+                    p.el.removeEventListener('click', p.el._clickHandler);
+                    p.el._clickHandler = null;
+                }
+            }
+        });
+    }
+
+    function onPlateClick(plateIdx) {
+        if (!activePowerup) return;
+        if (activePowerup === 'bomb') {
+            useBombOnPlate(plateIdx);
+        } else if (activePowerup === 'freeze') {
+            useFreezeOnPlate(plateIdx);
+        }
+    }
+
+    /* ── Initialise level ────────────────────────────────────── */
+    function initLevel(lvlIdx) {
+        if (lvlIdx >= LEVELS.length) lvlIdx = 0;
+        currentLevel = lvlIdx;
+        $levelBadge.textContent = 'Level ' + (lvlIdx + 1);
+
+        const def = LEVELS[lvlIdx];
+
+        // Generate fresh random colors for this level
+        const numColors = def.plates.reduce((max, p) => Math.max(max, p.colorIdx + 1), 0);
+        levelColors = generateLevelColors(Math.max(numColors, 8));
+
+        $board.innerHTML = '';
+
+        // Build plates state
+        plates = def.plates.map(p => ({ ...p, removed: false }));
+
+        // Render plates
+        plates.forEach((p, i) => {
+            const el = document.createElement('div');
+            el.className = 'plate';
+            const c = levelColors[p.colorIdx % levelColors.length];
+            Object.assign(el.style, {
+                left:   p.x + '%',
+                top:    p.y + '%',
+                width:  p.w + '%',
+                height: p.h + '%',
+                background: c.fill,
+                border: '2.5px solid ' + c.border,
+                zIndex: p.zIndex,
+            });
+            el.dataset.idx = i;
+            $board.appendChild(el);
+            p.el = el;
+        });
+
+        // Build screws state
+        screws = def.screwPositions.map((s) => ({
+            x: s.x,
+            y: s.y,
+            plateIndices: [...s.plates],
+            removed: false,
+            el: null,
+        }));
+
+        // Render screws
+        screws.forEach((s, i) => {
+            const el = document.createElement('div');
+            el.className = 'screw';
+            el.style.left = 'calc(' + s.x + '% - ' + SCREW_HALF + 'px)';
+            el.style.top  = 'calc(' + s.y + '% - ' + SCREW_HALF + 'px)';
+            el.setAttribute('tabindex', '0');
+            el.setAttribute('role', 'button');
+            el.setAttribute('aria-label', 'Screw ' + (i + 1));
+
+            const topPlate = getTopmostPlateForScrew(s);
+            if (topPlate !== null) {
+                const ring = document.createElement('span');
+                ring.className = 'ring';
+                ring.style.color = levelColors[plates[topPlate].colorIdx % levelColors.length].ring;
+                el.appendChild(ring);
+            }
+            el.style.zIndex = 50 + (topPlate !== null ? plates[topPlate].zIndex : 0);
+
+            // Click handler (tap-to-select fallback)
+            el.addEventListener('click', (e) => {
+                if (dragState && dragState.didDrag) return;
+                onScrewClick(i);
+            });
+
+            // Mouse drag
+            el.addEventListener('mousedown', (e) => onDragStart(e, i, 'mouse'));
+            // Touch drag
+            el.addEventListener('touchstart', (e) => onDragStart(e, i, 'touch'), { passive: false });
+
+            $board.appendChild(el);
+            s.el = el;
+        });
+
+        // Build holes
+        $holesBar.innerHTML = '';
+        holes = [];
+        for (let i = 0; i < def.holes; i++) {
+            const el = document.createElement('div');
+            el.className = 'hole';
+            el.setAttribute('tabindex', '0');
+            el.setAttribute('role', 'button');
+            el.setAttribute('aria-label', 'Hole ' + (i + 1));
+            el.addEventListener('click', () => onHoleClick(i));
+            $holesBar.appendChild(el);
+            holes.push({ filled: false, color: null, el });
+        }
+
+        selectedScrew = null;
+        undoStack = [];
+        busy = false;
+        dragState = null;
+        kbMode = 'screws';
+        kbIndex = -1;
+        clearKeyboardFocus();
+
+        initPowerups();
+        updateScrewStates();
+    }
+
+    /* ── Determine topmost non-removed plate for a screw ─────── */
+    function getTopmostPlateForScrew(s) {
+        let top = null;
+        for (const pi of s.plateIndices) {
+            if (!plates[pi].removed) {
+                if (top === null || plates[pi].zIndex > plates[top].zIndex) top = pi;
+            }
+        }
+        return top;
+    }
+
+    /* ── Check if a screw is blocked ────────────────────────── */
+    function isScrewBlocked(screwIdx) {
+        const s = screws[screwIdx];
+        const topZ = getTopmostPlateForScrew(s);
+        if (topZ === null) return true;
+        const topZIndex = plates[topZ].zIndex;
+        for (let i = 0; i < plates.length; i++) {
+            if (plates[i].removed) continue;
+            if (s.plateIndices.includes(i)) continue;
+            if (plates[i].zIndex <= topZIndex) continue;
+            if (
+                s.x >= plates[i].x && s.x <= plates[i].x + plates[i].w &&
+                s.y >= plates[i].y && s.y <= plates[i].y + plates[i].h
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /* ── Update visual state of screws ──────────────────────── */
+    function updateScrewStates() {
+        screws.forEach((s, i) => {
+            if (s.removed) {
+                s.el.style.display = 'none';
+                return;
+            }
+            s.el.style.display = '';
+            const blocked = isScrewBlocked(i);
+            s.el.classList.toggle('blocked', blocked);
+
+            const ring = s.el.querySelector('.ring');
+            const topPlate = getTopmostPlateForScrew(s);
+            if (ring && topPlate !== null) {
+                ring.style.color = levelColors[plates[topPlate].colorIdx % levelColors.length].ring;
+            }
+            s.el.style.zIndex = 50 + (topPlate !== null ? plates[topPlate].zIndex : 0);
+        });
+    }
+
+    /* ── Screw click handler (tap-to-select) ─────────────────── */
+    function onScrewClick(idx) {
+        if (busy) return;
+        if (activePowerup) return;
+        const s = screws[idx];
+        if (s.removed) return;
+        if (isScrewBlocked(idx)) return;
+
+        if (selectedScrew === idx) {
+            s.el.classList.remove('selected');
+            selectedScrew = null;
+            return;
+        }
+        if (selectedScrew !== null) {
+            screws[selectedScrew].el.classList.remove('selected');
+        }
+        selectedScrew = idx;
+        s.el.classList.add('selected');
+    }
+
+    /* ── Hole click handler ──────────────────────────────────── */
+    function onHoleClick(holeIdx) {
+        if (busy) return;
+        if (activePowerup) return;
+        if (selectedScrew === null) return;
+        if (holes[holeIdx].filled) return;
+
+        moveSelectedScrewToHole(selectedScrew, holeIdx);
+    }
+
+    function moveSelectedScrewToHole(screwIdx, holeIdx) {
+        const s = screws[screwIdx];
+        s.el.classList.remove('selected');
+        selectedScrew = null;
+
+        const platesBefore = plates.map(p => p.removed);
+        busy = true;
+
+        animateScrewToHole(screwIdx, holeIdx, () => {
+            s.removed = true;
+            s.el.style.display = 'none';
+
+            let colorIdx = 0;
+            let maxZ = -1;
+            for (const pi of s.plateIndices) {
+                if (plates[pi].zIndex > maxZ && !platesBefore[pi]) {
+                    maxZ = plates[pi].zIndex;
+                    colorIdx = plates[pi].colorIdx;
+                }
+            }
+            fillHole(holeIdx, colorIdx);
+            checkPlatesRemoved();
+            updateScrewStates();
+            undoStack.push({ screwIdx, holeIdx, platesBefore });
+            busy = false;
+
+            if (plates.every(p => p.removed)) {
+                setTimeout(showWin, 350);
+                return;
+            }
+            if (holes.every(h => h.filled) && !plates.every(p => p.removed)) {
+                setTimeout(showGameOver, 350);
+            }
+            decrementFreezeCounters();
+        });
+    }
+
+    /* ── Animate screw flying to hole ────────────────────────── */
+    function animateScrewToHole(screwIdx, holeIdx, cb) {
+        const s = screws[screwIdx];
+        const sEl = s.el;
+        const hEl = holes[holeIdx].el;
+
+        const boardRect = $board.getBoundingClientRect();
+        const holeRect  = hEl.getBoundingClientRect();
+
+        const tx = holeRect.left + holeRect.width / 2 - boardRect.left - SCREW_HALF;
+        const ty = holeRect.top  + holeRect.height / 2 - boardRect.top - SCREW_HALF;
+
+        sEl.classList.add('animating');
+        sEl.style.left = tx + 'px';
+        sEl.style.top  = ty + 'px';
+        sEl.style.transform = 'scale(.7)';
+        sEl.style.opacity = '0';
+        sEl.style.zIndex = 999;
+
+        setTimeout(cb, 420);
+    }
+
+    /* ── Fill a hole visually ────────────────────────────────── */
+    function fillHole(holeIdx, colorIdx) {
+        const h = holes[holeIdx];
+        h.filled = true;
+        h.color = colorIdx;
+        const el = h.el;
+        el.classList.add('filled');
+        el.innerHTML = '';
+        const c = levelColors[colorIdx % levelColors.length];
+        const ringEl = document.createElement('span');
+        ringEl.className = 'ring-fill';
+        ringEl.style.color = c.ring;
+        el.appendChild(ringEl);
+        const head = document.createElement('span');
+        head.className = 'screw-head';
+        head.textContent = '+';
+        el.appendChild(head);
+    }
+
+    /* ── Check & remove plates whose screws are all gone ─────── */
+    function checkPlatesRemoved() {
+        plates.forEach((p, pi) => {
+            if (p.removed) return;
+            const hasScrew = screws.some(s => !s.removed && s.plateIndices.includes(pi));
+            if (!hasScrew) {
+                p.removed = true;
+                p.el.classList.add('removed');
+                clearHolesForPlate(pi);
+            }
+        });
+    }
+
+    /* ── When a plate is removed, free its screws from the holes ── */
+    function clearHolesForPlate(plateIdx) {
+        const cIdx = plates[plateIdx].colorIdx;
+        let countToFree = 0;
+        screws.forEach(s => {
+            if (!s.removed) return;
+            if (!s.plateIndices.includes(plateIdx)) return;
+            if (s.plateIndices.every(pi => plates[pi].removed)) {
+                countToFree++;
+            }
+        });
+        let freed = 0;
+        for (let i = 0; i < holes.length && freed < countToFree; i++) {
+            if (holes[i].filled && holes[i].color === cIdx) {
+                unfillHole(i);
+                freed++;
+            }
+        }
+    }
+
+    function unfillHole(holeIdx) {
+        const h = holes[holeIdx];
+        h.filled = false;
+        h.color = null;
+        h.el.classList.remove('filled');
+        h.el.innerHTML = '';
+    }
+
+    /* ── Undo ────────────────────────────────────────────────── */
+    function undo() {
+        if (busy || undoStack.length === 0) return;
+        const action = undoStack.pop();
+        action.platesBefore.forEach((wasRemoved, i) => {
+            if (plates[i].removed !== wasRemoved) {
+                plates[i].removed = wasRemoved;
+                plates[i].el.classList.toggle('removed', wasRemoved);
+            }
+        });
+        const s = screws[action.screwIdx];
+        s.removed = false;
+        s.el.style.display = '';
+        s.el.classList.remove('animating');
+        s.el.style.left = 'calc(' + s.x + '% - ' + SCREW_HALF + 'px)';
+        s.el.style.top  = 'calc(' + s.y + '% - ' + SCREW_HALF + 'px)';
+        s.el.style.transform = '';
+        s.el.style.opacity = '';
+        s.el.style.zIndex = '';
+
+        unfillHole(action.holeIdx);
+        rebuildHoles();
+        updateScrewStates();
+    }
+
+    function rebuildHoles() {
+        holes.forEach((h, i) => unfillHole(i));
+        let hi = 0;
+        screws.forEach(s => {
+            if (!s.removed) return;
+            if (hi >= holes.length) return;
+            let colorIdx = 0;
+            let maxZ = -1;
+            for (const pi of s.plateIndices) {
+                if (plates[pi].zIndex > maxZ) {
+                    maxZ = plates[pi].zIndex;
+                    colorIdx = plates[pi].colorIdx;
+                }
+            }
+            fillHole(hi, colorIdx);
+            hi++;
+        });
+    }
+
+    /* ── Win / Game-over ─────────────────────────────────────── */
+    function showWin() {
+        $winMsg.textContent = 'You cleared Level ' + (currentLevel + 1) + '!';
+        $winOverlay.classList.add('show');
+    }
+    function showGameOver() {
+        $gameOverOverlay.classList.add('show');
+    }
+
+    /* ============================================================
+       DRAG & DROP SUPPORT (Mouse + Touch)
+       ============================================================ */
+    function onDragStart(e, screwIdx, inputType) {
+        if (busy) return;
+        if (activePowerup) return;
+        const s = screws[screwIdx];
+        if (s.removed || isScrewBlocked(screwIdx)) return;
+
+        const clientX = inputType === 'touch' ? e.touches[0].clientX : e.clientX;
+        const clientY = inputType === 'touch' ? e.touches[0].clientY : e.clientY;
+
+        dragState = {
+            screwIdx,
+            inputType,
+            startX: clientX,
+            startY: clientY,
+            didDrag: false,
+        };
+
+        if (inputType === 'touch') {
+            e.preventDefault(); // prevent scrolling
+        }
+    }
+
+    function onDragMove(e) {
+        if (!dragState) return;
+        const inputType = dragState.inputType;
+        const clientX = inputType === 'touch' ? e.touches[0].clientX : e.clientX;
+        const clientY = inputType === 'touch' ? e.touches[0].clientY : e.clientY;
+
+        const dx = clientX - dragState.startX;
+        const dy = clientY - dragState.startY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Only start drag after a small threshold
+        if (!dragState.didDrag && dist < 8) return;
+
+        if (!dragState.didDrag) {
+            dragState.didDrag = true;
+            // Deselect any selected screw
+            if (selectedScrew !== null) {
+                screws[selectedScrew].el.classList.remove('selected');
+                selectedScrew = null;
+            }
+            // Create drag ghost
+            createDragGhost(dragState.screwIdx);
+            screws[dragState.screwIdx].el.classList.add('dragging');
+            screws[dragState.screwIdx].el.style.opacity = '0.3';
+            // Highlight valid drop targets
+            highlightDropTargets(true);
+        }
+
+        // Move ghost
+        if (dragGhost) {
+            dragGhost.style.left = (clientX - SCREW_HALF) + 'px';
+            dragGhost.style.top  = (clientY - SCREW_HALF) + 'px';
+        }
+
+        if (inputType === 'touch') {
+            e.preventDefault();
+        }
+    }
+
+    function onDragEnd(e) {
+        if (!dragState) return;
+        const ds = dragState;
+        dragState = null;
+
+        if (!ds.didDrag) {
+            // It was a tap, not a drag. The click handler will fire.
+            return;
+        }
+
+        const s = screws[ds.screwIdx];
+        s.el.classList.remove('dragging');
+        s.el.style.opacity = '';
+        highlightDropTargets(false);
+        removeDragGhost();
+
+        // Determine drop target
+        const inputType = ds.inputType;
+        let clientX, clientY;
+        if (inputType === 'touch') {
+            const touch = e.changedTouches[0];
+            clientX = touch.clientX;
+            clientY = touch.clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        const dropHoleIdx = findHoleAtPoint(clientX, clientY);
+        if (dropHoleIdx !== null && !holes[dropHoleIdx].filled && !busy) {
+            moveSelectedScrewToHole(ds.screwIdx, dropHoleIdx);
+        }
+    }
+
+    function createDragGhost(screwIdx) {
+        removeDragGhost();
+        const s = screws[screwIdx];
+        const ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        const topPlate = getTopmostPlateForScrew(s);
+        if (topPlate !== null) {
+            const ring = document.createElement('span');
+            ring.className = 'ring';
+            ring.style.color = levelColors[plates[topPlate].colorIdx % levelColors.length].ring;
+            ghost.appendChild(ring);
+        }
+        document.body.appendChild(ghost);
+        dragGhost = ghost;
+    }
+
+    function removeDragGhost() {
+        if (dragGhost) {
+            dragGhost.remove();
+            dragGhost = null;
+        }
+    }
+
+    function highlightDropTargets(show) {
+        holes.forEach(h => {
+            if (!h.filled) {
+                h.el.classList.toggle('drop-target', show);
+            }
+        });
+    }
+
+    function findHoleAtPoint(x, y) {
+        for (let i = 0; i < holes.length; i++) {
+            const rect = holes[i].el.getBoundingClientRect();
+            // Slightly expand hit area for easier dropping
+            const pad = 8;
+            if (x >= rect.left - pad && x <= rect.right + pad &&
+                y >= rect.top - pad && y <= rect.bottom + pad) {
+                return i;
+            }
+        }
+        return null;
+    }
+
+    // Global mouse/touch move/end listeners
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    document.addEventListener('touchmove', onDragMove, { passive: false });
+    document.addEventListener('touchend', onDragEnd);
+
+    /* ============================================================
+       KEYBOARD NAVIGATION
+       ============================================================ */
+    function clearKeyboardFocus() {
+        document.querySelectorAll('.keyboard-focus').forEach(el => el.classList.remove('keyboard-focus'));
+    }
+
+    function getAvailableScrews() {
+        return screws.map((s, i) => ({ s, i })).filter(({ s, i }) => !s.removed && !isScrewBlocked(i));
+    }
+
+    function getAvailableHoles() {
+        return holes.map((h, i) => ({ h, i })).filter(({ h }) => !h.filled);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if ($startScreen.style.display !== 'none') return;
+        if ($winOverlay.classList.contains('show') || $gameOverOverlay.classList.contains('show')) return;
+        if (busy) return;
+
+        switch (e.key) {
+            case 'Tab': {
+                e.preventDefault();
+                kbMode = kbMode === 'screws' ? 'holes' : 'screws';
+                kbIndex = 0;
+                clearKeyboardFocus();
+                updateKeyboardFocus();
+                break;
+            }
+            case 'ArrowRight':
+            case 'ArrowDown': {
+                e.preventDefault();
+                kbIndex++;
+                updateKeyboardFocus();
+                break;
+            }
+            case 'ArrowLeft':
+            case 'ArrowUp': {
+                e.preventDefault();
+                kbIndex--;
+                updateKeyboardFocus();
+                break;
+            }
+            case 'Enter':
+            case ' ': {
+                e.preventDefault();
+                if (kbMode === 'screws') {
+                    const available = getAvailableScrews();
+                    if (available.length > 0 && kbIndex >= 0) {
+                        const idx = kbIndex % available.length;
+                        onScrewClick(available[idx].i);
+                    }
+                } else {
+                    const available = getAvailableHoles();
+                    if (available.length > 0 && kbIndex >= 0) {
+                        const idx = kbIndex % available.length;
+                        onHoleClick(available[idx].i);
+                    }
+                }
+                break;
+            }
+            case 'Escape': {
+                if (selectedScrew !== null) {
+                    screws[selectedScrew].el.classList.remove('selected');
+                    selectedScrew = null;
+                }
+                if (activePowerup) {
+                    activePowerup = null;
+                    enablePlateClicks(false);
+                    renderPowerupsBar();
+                }
+                clearKeyboardFocus();
+                kbIndex = -1;
+                break;
+            }
+        }
+    });
+
+    function updateKeyboardFocus() {
+        clearKeyboardFocus();
+        if (kbMode === 'screws') {
+            const available = getAvailableScrews();
+            if (available.length === 0) return;
+            if (kbIndex < 0) kbIndex = available.length - 1;
+            kbIndex = kbIndex % available.length;
+            available[kbIndex].s.el.classList.add('keyboard-focus');
+        } else {
+            const available = getAvailableHoles();
+            if (available.length === 0) return;
+            if (kbIndex < 0) kbIndex = available.length - 1;
+            kbIndex = kbIndex % available.length;
+            available[kbIndex].h.el.classList.add('keyboard-focus');
+        }
+    }
+
+    /* ── Event wiring ────────────────────────────────────────── */
+    document.getElementById('btnStart').addEventListener('click', () => {
+        $startScreen.style.display = 'none';
+        initLevel(0);
+    });
+    document.getElementById('btnRestart').addEventListener('click', () => {
+        $winOverlay.classList.remove('show');
+        $gameOverOverlay.classList.remove('show');
+        initLevel(currentLevel);
+    });
+    document.getElementById('btnUndo').addEventListener('click', undo);
+    document.getElementById('btnNext').addEventListener('click', () => {
+        $winOverlay.classList.remove('show');
+        initLevel(currentLevel + 1);
+    });
+    document.getElementById('btnRetry').addEventListener('click', () => {
+        $gameOverOverlay.classList.remove('show');
+        initLevel(currentLevel);
+    });
+
+    // Deselect screw when clicking board background
+    $board.addEventListener('click', (e) => {
+        if (e.target === $board && selectedScrew !== null) {
+            screws[selectedScrew].el.classList.remove('selected');
+            selectedScrew = null;
+        }
+    });
+
+    // Prevent page scrolling during touch on the app
+    document.getElementById('app').addEventListener('touchmove', (e) => {
+        if (dragState && dragState.didDrag) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+})();
+</script>
+</body>
+</html>
