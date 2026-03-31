@@ -1,0 +1,107 @@
+/* ========== LOGO ANIMATION ========== */
+@keyframes logoBob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(-5deg); }
+  75% { transform: translateY(-8px) rotate(5deg); }
+}
+
+/* ========== SCREW ANIMATIONS ========== */
+@keyframes screwShimmer {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
+@keyframes hintPulse {
+  0% { filter: brightness(1) drop-shadow(0 0 6px rgba(255,255,255,0.5)); }
+  100% { filter: brightness(1.5) drop-shadow(0 0 16px rgba(255,255,255,0.9)); }
+}
+
+@keyframes cutterBlink {
+  0% { outline-color: #f1c40f; filter: brightness(1); }
+  100% { outline-color: #e74c3c; filter: brightness(1.2); }
+}
+
+@keyframes unscrewSpin {
+  0% { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  80% { transform: translate(-50%, -50%) rotate(600deg) scale(1.1); }
+  100% { transform: translate(-50%, -50%) rotate(720deg) scale(0.9); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translate(-50%, -50%) translateX(0); }
+  20% { transform: translate(-50%, -50%) translateX(-4px); }
+  40% { transform: translate(-50%, -50%) translateX(4px); }
+  60% { transform: translate(-50%, -50%) translateX(-3px); }
+  80% { transform: translate(-50%, -50%) translateX(3px); }
+}
+
+@keyframes starPop {
+  0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+  60% { transform: scale(1.3) rotate(10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* ========== HOLE ANIMATIONS ========== */
+@keyframes screwLand {
+  0% { transform: scale(1.3); opacity: 0.7; }
+  60% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes matchPop {
+  0% { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1.4); opacity: 0.9; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+/* ========== MODAL ANIMATION ========== */
+@keyframes modalSlideIn {
+  0% { transform: translateY(30px) scale(0.95); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ========== FLYING SCREW (animation element) ========== */
+.flying-screw {
+  position: fixed;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  z-index: 300;
+  pointer-events: none;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.6),
+    inset 0 2px 4px rgba(255, 255, 255, 0.35),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.2);
+}
+
+.flying-screw::before,
+.flying-screw::after {
+  content: '';
+  position: absolute;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 1px;
+}
+
+.flying-screw::before {
+  width: 55%;
+  height: 3px;
+  top: 50%;
+  left: 22.5%;
+  transform: translateY(-50%);
+}
+
+.flying-screw::after {
+  width: 3px;
+  height: 55%;
+  left: 50%;
+  top: 22.5%;
+  transform: translateX(-50%);
+}
+
+/* ========== PARTICLE CANVAS ========== */
+#particleCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  pointer-events: none;
+}

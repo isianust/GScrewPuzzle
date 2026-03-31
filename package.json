@@ -1,0 +1,32 @@
+{
+  "name": "gscrewpuzzle",
+  "version": "1.0.0",
+  "description": "A production-quality screw puzzle game with match-3 mechanics, layered plate physics, and power-ups",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "format": "prettier --write \"src/**/*.{js,css,html}\"",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "puzzle",
+    "game",
+    "screw",
+    "match-3",
+    "vanilla-js"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.2",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0",
+    "jsdom": "^29.0.1",
+    "prettier": "^3.8.1",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2"
+  }
+}

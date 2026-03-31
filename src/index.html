@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screw Puzzle</title>
+<link rel="stylesheet" href="./css/main.css">
+</head>
+<body>
+<div id="app">
+  <!-- ==================== START SCREEN ==================== -->
+  <div id="startScreen" class="screen active">
+    <div class="screw-logo">🔩</div>
+    <h1>Screw Puzzle</h1>
+    <p class="subtitle">Unscrew · Match · Clear!</p>
+    <button class="menu-btn btn-play" id="btnPlay">▶ &nbsp;Play</button>
+    <button class="menu-btn btn-levels" id="btnLevels">📋 &nbsp;Level Select</button>
+    <button class="menu-btn btn-small" style="background:#2a2a4a;color:#8888aa;border:1px solid #3a3a5a"
+            id="menuMuteBtn">🔊 Sound On</button>
+  </div>
+
+  <!-- ==================== LEVEL SELECT ==================== -->
+  <div id="levelSelect" class="screen">
+    <button class="back-btn" id="btnBack">← Back</button>
+    <h2>Select Level</h2>
+    <div class="level-grid" id="levelGrid"></div>
+  </div>
+
+  <!-- ==================== GAME SCREEN ==================== -->
+  <div id="gameScreen" class="screen">
+    <div class="game-header">
+      <div class="level-info">
+        <div class="level-title" id="levelTitle">Level 1</div>
+        <div class="moves-display" id="movesDisplay">Moves: 0</div>
+      </div>
+      <div class="header-btns">
+        <button class="icon-btn" id="gameMuteBtn" title="Toggle Sound">🔊</button>
+        <button class="icon-btn" id="btnPause" title="Pause">⏸</button>
+      </div>
+    </div>
+    <div class="board-wrapper">
+      <div id="board"></div>
+    </div>
+    <div class="holes-bar" id="holesBar"></div>
+    <div class="powerups-bar" id="powerupsBar">
+      <button class="powerup-btn" id="puUndo">
+        <span class="pu-icon">↩️</span>
+        <span class="pu-label">Undo</span>
+      </button>
+      <button class="powerup-btn" id="puExtra">
+        <span class="pu-icon">➕</span>
+        <span class="pu-label">Slots</span>
+        <span class="pu-count" id="puExtraCount">1</span>
+      </button>
+      <button class="powerup-btn" id="puCutter">
+        <span class="pu-icon">✂️</span>
+        <span class="pu-label">Cut</span>
+        <span class="pu-count" id="puCutterCount">2</span>
+      </button>
+      <button class="powerup-btn" id="puHint">
+        <span class="pu-icon">💡</span>
+        <span class="pu-label">Hint</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== WIN MODAL ==================== -->
+  <div class="modal-overlay" id="winModal">
+    <div class="modal">
+      <h2>🎉 Level Complete!</h2>
+      <div class="star-rating" id="winStars">⭐⭐⭐</div>
+      <div class="score-text" id="winScore">Moves: 6 / Par: 6</div>
+      <div class="modal-btns">
+        <button class="menu-btn btn-play" id="btnNextLevel">Next Level →</button>
+        <button class="menu-btn btn-small" style="background:#2a2a4a;color:#aaa;border:1px solid #444"
+                id="btnReplayWin">🔄 Replay</button>
+        <button class="menu-btn btn-small" style="background:#1a1a30;color:#888;border:1px solid #333"
+                id="btnLevelsWin">📋 Levels</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== LOSE MODAL ==================== -->
+  <div class="modal-overlay" id="loseModal">
+    <div class="modal">
+      <h2>😵 Out of Space!</h2>
+      <p class="score-text">All holes are full and no matches are possible.<br>
+        Try removing screws in a different order to create color groups!</p>
+      <div class="modal-btns">
+        <button class="menu-btn btn-retry" id="btnRetryLose">🔄 Try Again</button>
+        <button class="menu-btn btn-small" style="background:#1a1a30;color:#888;border:1px solid #333"
+                id="btnLevelsLose">📋 Levels</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PAUSE OVERLAY ==================== -->
+  <div id="pauseOverlay">
+    <h2>⏸ Paused</h2>
+    <button class="menu-btn btn-play" id="btnResume">▶ &nbsp;Resume</button>
+    <button class="menu-btn btn-small btn-retry" id="btnRestartPause">🔄 Restart</button>
+    <button class="menu-btn btn-small" style="background:#1a1a30;color:#888;border:1px solid #333"
+            id="btnLevelsPause">📋 Level Select</button>
+  </div>
+</div>
+
+<!-- Particle effects canvas -->
+<canvas id="particleCanvas"></canvas>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
