@@ -1,0 +1,353 @@
+/* ========== GAME BOARD ========== */
+.board-wrapper {
+  flex: 1;
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+#board {
+  position: relative;
+  width: 400px;
+  height: 480px;
+  transform-origin: top center;
+}
+
+/* ========== METAL PLATES ========== */
+.plate {
+  position: absolute;
+  border-radius: 10px;
+  transition: opacity 0.6s ease, transform 0.6s ease, filter 0.6s ease;
+  background: linear-gradient(
+    155deg,
+    #d8d8e0 0%,
+    #b8b8c8 20%,
+    #ccccda 35%,
+    #a0a0b0 55%,
+    #b8b8c5 70%,
+    #909098 100%
+  );
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    3px 5px 14px rgba(0, 0, 0, 0.65),
+    -1px -1px 3px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.plate::before {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px; right: 3px;
+  height: 40%;
+  border-radius: 8px 8px 50% 50%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.plate::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.plate.removing {
+  opacity: 0;
+  transform: scale(0.8) rotate(2deg);
+  filter: blur(3px) brightness(1.5);
+}
+
+/* ========== SCREWS ========== */
+.screw {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: box-shadow 0.2s, filter 0.2s;
+  z-index: 50;
+}
+
+.screw-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    inset 0 2px 4px rgba(255, 255, 255, 0.35),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.25);
+}
+
+/* Phillips-head cross pattern */
+.screw-inner::before,
+.screw-inner::after {
+  content: '';
+  position: absolute;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 1px;
+}
+
+.screw-inner::before {
+  width: 55%;
+  height: 3px;
+  top: 50%;
+  left: 22.5%;
+  transform: translateY(-50%);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.15);
+}
+
+.screw-inner::after {
+  width: 3px;
+  height: 55%;
+  left: 50%;
+  top: 22.5%;
+  transform: translateX(-50%);
+  box-shadow: 1px 0 0 rgba(255,255,255,0.15);
+}
+
+/* Specular highlight on screw */
+.screw-highlight {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  top: 5px;
+  left: 7px;
+  background: radial-gradient(circle, rgba(255,255,255,0.7), transparent);
+  pointer-events: none;
+}
+
+/* Outer rim ring for screws */
+.screw-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+/* Screw states */
+.screw.blocked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.5);
+}
+
+.screw.accessible {
+  cursor: pointer;
+  animation: screwShimmer 2.5s ease-in-out infinite;
+}
+
+.screw.hint-glow {
+  animation: hintPulse 0.5s ease-in-out infinite alternate !important;
+  z-index: 999 !important;
+}
+
+.screw.cutter-target {
+  outline: 2px dashed #f1c40f;
+  outline-offset: 3px;
+  animation: cutterBlink 0.8s ease-in-out infinite alternate !important;
+}
+
+/* ========== SCREW COLORS ========== */
+.screw-red .screw-inner {
+  background: radial-gradient(circle at 35% 35%, #ff8a80 0%, #e74c3c 45%, #b71c1c 100%);
+}
+.screw-blue .screw-inner {
+  background: radial-gradient(circle at 35% 35%, #90caf9 0%, #3498db 45%, #1565c0 100%);
+}
+.screw-green .screw-inner {
+  background: radial-gradient(circle at 35% 35%, #a5d6a7 0%, #2ecc71 45%, #1b5e20 100%);
+}
+.screw-yellow .screw-inner {
+  background: radial-gradient(circle at 35% 35%, #fff9c4 0%, #f1c40f 45%, #f57f17 100%);
+}
+.screw-purple .screw-inner {
+  background: radial-gradient(circle at 35% 35%, #ce93d8 0%, #9b59b6 45%, #6a1b9a 100%);
+}
+.screw-orange .screw-inner {
+  background: radial-gradient(circle at 35% 35%, #ffcc80 0%, #e67e22 45%, #bf360c 100%);
+}
+
+/* ========== HOLES BAR ========== */
+.holes-bar {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 8px;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 64px;
+  flex-wrap: wrap;
+}
+
+.hole {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #3a3a55;
+  background: radial-gradient(circle at 40% 40%, #1e1e35, #0a0a18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, 0.7),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.03),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hole.extra {
+  border-color: #f5af19;
+  border-style: dashed;
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, 0.7),
+    0 0 8px rgba(245, 175, 25, 0.2);
+}
+
+.hole .hole-screw {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  position: absolute;
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.5),
+    inset 0 2px 3px rgba(255, 255, 255, 0.3),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.2);
+  animation: screwLand 0.25s ease-out;
+}
+
+/* Cross pattern on hole screws */
+.hole .hole-screw::before,
+.hole .hole-screw::after {
+  content: '';
+  position: absolute;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 1px;
+}
+
+.hole .hole-screw::before {
+  width: 50%;
+  height: 2.5px;
+  top: 50%;
+  left: 25%;
+  transform: translateY(-50%);
+}
+
+.hole .hole-screw::after {
+  width: 2.5px;
+  height: 50%;
+  left: 50%;
+  top: 25%;
+  transform: translateX(-50%);
+}
+
+/* Hole screw colors */
+.hole-screw.color-red {
+  background: radial-gradient(circle at 35% 35%, #ff8a80, #e74c3c 50%, #b71c1c);
+}
+.hole-screw.color-blue {
+  background: radial-gradient(circle at 35% 35%, #90caf9, #3498db 50%, #1565c0);
+}
+.hole-screw.color-green {
+  background: radial-gradient(circle at 35% 35%, #a5d6a7, #2ecc71 50%, #1b5e20);
+}
+.hole-screw.color-yellow {
+  background: radial-gradient(circle at 35% 35%, #fff9c4, #f1c40f 50%, #f57f17);
+}
+.hole-screw.color-purple {
+  background: radial-gradient(circle at 35% 35%, #ce93d8, #9b59b6 50%, #6a1b9a);
+}
+.hole-screw.color-orange {
+  background: radial-gradient(circle at 35% 35%, #ffcc80, #e67e22 50%, #bf360c);
+}
+
+/* ========== POWER-UPS BAR ========== */
+.powerups-bar {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 16px 10px;
+  flex-shrink: 0;
+}
+
+.powerup-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 54px;
+  border-radius: 12px;
+  border: 1.5px solid #3a3a5a;
+  background: linear-gradient(145deg, #1a1a38, #22224a);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+}
+
+.powerup-btn:hover {
+  border-color: #667eea;
+}
+
+.powerup-btn:active {
+  transform: scale(0.88);
+}
+
+.powerup-btn.active-mode {
+  border-color: #f1c40f !important;
+  box-shadow: 0 0 10px rgba(241, 196, 15, 0.3);
+}
+
+.powerup-btn .pu-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.powerup-btn .pu-label {
+  font-size: 0.55rem;
+  color: #7777aa;
+  margin-top: 2px;
+  letter-spacing: 0.3px;
+}
+
+.powerup-btn .pu-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  font-size: 0.6rem;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.powerup-btn.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+  filter: grayscale(0.5);
+}
